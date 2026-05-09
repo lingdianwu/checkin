@@ -502,6 +502,29 @@ body {
   cursor: pointer;
 }
 
+/* 花名册表格 */
+.roster-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+.roster-table th {
+  background: #f8f9fb;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #666;
+  text-align: left;
+}
+.roster-table td {
+  padding: 8px 14px;
+  font-size: 14px;
+  border-top: 1px solid #f0f0f0;
+}
+
 /* 二维码区域 */
 .qr-section {
   display: flex;
