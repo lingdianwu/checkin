@@ -293,6 +293,30 @@
       document.getElementById('btnCheckout').style.display = 'none';
     }
 
+    function renderCheckInDone(rec) {
+      document.getElementById('statusBadge').textContent = '已到岗';
+      document.getElementById('statusBadge').className = 'status-badge in';
+      document.getElementById('timeInfo').innerHTML =
+        '<div class="time-row"><span class="label">到岗时间</span><span class="value">' + fmtTime(new Date(rec.check_in)) + '</span></div>' +
+        '<div class="hours-highlight" style="color:#e65100">请重新扫码进行签退</div>';
+      document.getElementById('btnCheckin').style.display = 'none';
+      document.getElementById('btnCheckout').style.display = 'none';
+    }
+
+    function renderCheckOutDone(rec) {
+      document.getElementById('statusBadge').textContent = '已离岗';
+      document.getElementById('statusBadge').className = 'status-badge out';
+      var ci = new Date(rec.check_in);
+      var co = new Date(rec.check_out);
+      document.getElementById('timeInfo').innerHTML =
+        '<div class="time-row"><span class="label">到岗时间</span><span class="value">' + fmtTime(ci) + '</span></div>' +
+        '<div class="time-row"><span class="label">离岗时间</span><span class="value">' + fmtTime(co) + '</span></div>' +
+        '<div class="hours-highlight">本次在岗 ' + calcHours(ci, co) + '</div>' +
+        '<div style="color:#999;margin-top:10px">请重新扫码进行下次签到</div>';
+      document.getElementById('btnCheckin').style.display = 'none';
+      document.getElementById('btnCheckout').style.display = 'none';
+    }
+
     // --- 打卡操作 ---
     window.doCheckIn = function() {
       var now = new Date();
@@ -304,8 +328,8 @@
       }).select().single().then(function(_ref4) {
         if (_ref4.error) throw _ref4.error;
         currentRecord = _ref4.data;
-        renderCheckedIn(_ref4.data);
-        toast('签到成功 ' + fmtTime(now));
+        renderCheckInDone(_ref4.data);
+        toast('签到成功，请重新扫码进行签退');
       }).catch(function(err) {
         toast('签到失败: ' + (err.message || '网络错误'), 'error');
       });
@@ -319,8 +343,8 @@
         .then(function(_ref5) {
           if (_ref5.error) throw _ref5.error;
           currentRecord = _ref5.data;
-          renderCheckedOut(_ref5.data);
-          toast('签退成功 ' + fmtTime(now));
+          renderCheckOutDone(_ref5.data);
+          toast('签退成功，请重新扫码进行下次签到');
         }).catch(function(err) {
           toast('签退失败: ' + (err.message || '网络错误'), 'error');
         });
