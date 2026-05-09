@@ -285,7 +285,9 @@
             document.getElementById('filterStore').value = gAdminStoreId;
             document.getElementById('filterStore').disabled = true;
             document.getElementById('rosterStore').value = gAdminStoreId;
+            document.getElementById('rosterStore').disabled = true;
             document.getElementById('batchStore').value = gAdminStoreId;
+            document.getElementById('batchStore').disabled = true;
           }
           loadRecords();
           loadRosterList();
@@ -397,6 +399,7 @@
       var name = document.getElementById('rosterName').value.trim();
       var phone = document.getElementById('rosterPhone').value.trim();
       if (!storeId) { alert('请选择门店'); return; }
+      if (gAdminStoreId && storeId !== gAdminStoreId) { alert('无权限'); return; }
       if (!name) { alert('请输入姓名'); return; }
       if (phone && !/^1\d{10}$/.test(phone)) { alert('手机号格式不正确'); return; }
       db.from('roster').select('*').eq('store_id', storeId).eq('name', name).single()
@@ -416,6 +419,7 @@
       var fileEl = document.getElementById('excelFile');
       var msgEl = document.getElementById('batchMsg');
       if (!storeId) { msgEl.textContent = '请选择门店'; msgEl.style.color = '#f44336'; return; }
+      if (gAdminStoreId && storeId !== gAdminStoreId) { msgEl.textContent = '无权限'; msgEl.style.color = '#f44336'; return; }
       var file = fileEl.files[0];
       if (!file) { msgEl.textContent = '请选择 Excel 文件'; msgEl.style.color = '#f44336'; return; }
       msgEl.textContent = '正在解析...'; msgEl.style.color = '#888';
@@ -468,8 +472,9 @@
 
     function loadRosterList() {
       document.getElementById('rosterListContainer').innerHTML = '<div class="loading">加载中</div>';
-      db.from('roster').select('*').order('store_id').order('name')
-        .then(function(r) {
+      var query = db.from('roster').select('*').order('store_id').order('name');
+      if (gAdminStoreId) query = query.eq('store_id', gAdminStoreId);
+      query.then(function(r) {
           if (r.error) throw r.error;
           var list = r.data || [];
           if (list.length === 0) {
