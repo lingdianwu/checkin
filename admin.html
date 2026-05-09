@@ -120,10 +120,12 @@
       <div id="cutoffSetup" style="background:#fff;border-radius:12px;padding:20px;margin-bottom:20px;box-shadow:0 2px 6px rgba(0,0,0,0.05)">
         <h3 style="margin-bottom:8px">打卡截止时间</h3>
         <p style="font-size:13px;color:#999;margin-bottom:12px">前一天的未签退记录，在隔天这个时间后自动作废，需要重新签到</p>
-        <div style="display:flex;gap:10px;align-items:center">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
           <span style="font-size:14px;color:#666">隔天凌晨</span>
-          <input type="number" id="cutoffHour" min="0" max="23" value="2" style="width:70px;padding:10px 14px;font-size:14px;border:1.5px solid #e2e8f0;border-radius:8px;outline:none;text-align:center">
-          <span style="font-size:14px;color:#666">点</span>
+          <input type="number" id="cutoffHour" min="0" max="23" value="2" style="width:60px;padding:10px 14px;font-size:14px;border:1.5px solid #e2e8f0;border-radius:8px;outline:none;text-align:center">
+          <span style="font-size:14px;color:#666">:</span>
+          <input type="number" id="cutoffMinute" min="0" max="59" value="0" style="width:60px;padding:10px 14px;font-size:14px;border:1.5px solid #e2e8f0;border-radius:8px;outline:none;text-align:center">
+          <span style="font-size:14px;color:#666">后未签退记录自动作废</span>
           <button class="btn-primary" onclick="saveCutoff()">保存</button>
         </div>
         <p id="cutoffMsg" style="font-size:13px;margin-top:8px"></p>
@@ -502,25 +504,27 @@
     };
 
     window.saveCutoff = function() {
-      var val = parseInt(document.getElementById('cutoffHour').value, 10);
-      if (isNaN(val) || val < 0 || val > 23) {
-        document.getElementById('cutoffMsg').textContent = '请输入 0-23 的数字';
+      var h = parseInt(document.getElementById('cutoffHour').value, 10);
+      var m = parseInt(document.getElementById('cutoffMinute').value, 10);
+      if (isNaN(h) || h < 0 || h > 23 || isNaN(m) || m < 0 || m > 59) {
+        document.getElementById('cutoffMsg').textContent = '请输入合法时间（时: 0-23，分: 0-59）';
         document.getElementById('cutoffMsg').style.color = '#f44336'; return;
       }
       db.from('app_config').select('*').limit(1).single().then(function(r) {
         if (r.data) {
-          return db.from('app_config').update({ cutoff_hour: val }).eq('id', r.data.id);
+          return db.from('app_config').update({ cutoff_hour: h, cutoff_minute: m }).eq('id', r.data.id);
         } else {
-          return db.from('app_config').insert({ admin_password: 'admin123', cutoff_hour: val });
+          return db.from('app_config').insert({ admin_password: 'admin123', cutoff_hour: h, cutoff_minute: m });
         }
       }).then(function() {
-        document.getElementById('cutoffMsg').textContent = '已保存，隔天凌晨 ' + val + ' 点后未签退记录自动作废';
+        document.getElementById('cutoffMsg').textContent = '已保存，隔天 ' + pad2(h) + ':' + pad2(m) + ' 后未签退记录自动作废';
         document.getElementById('cutoffMsg').style.color = '#4caf50';
       }).catch(function(e) {
         document.getElementById('cutoffMsg').textContent = '保存失败: ' + (e.message || '网络错误');
         document.getElementById('cutoffMsg').style.color = '#f44336';
       });
     };
+    function pad2(n) { return ('0' + n).slice(-2); }
 
     function loadQRCodes() {
       document.getElementById('qrContainer').innerHTML = '<div class="loading">加载中</div>';
@@ -534,8 +538,10 @@
         window._stores = stores;
 
         var secret = (configData && configData.daily_secret) || '';
-        var cutoff = (configData && configData.cutoff_hour != null) ? configData.cutoff_hour : 2;
-        document.getElementById('cutoffHour').value = cutoff;
+        var cutoffH = (configData && configData.cutoff_hour != null) ? configData.cutoff_hour : 2;
+        var cutoffM = (configData && configData.cutoff_minute != null) ? configData.cutoff_minute : 0;
+        document.getElementById('cutoffHour').value = cutoffH;
+        document.getElementById('cutoffMinute').value = cutoffM;
         if (!secret) {
           document.getElementById('secretSetup').style.display = '';
         } else {
