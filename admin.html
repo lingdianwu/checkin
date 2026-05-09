@@ -22,8 +22,8 @@
     <div class="admin-header">
       <h1>兼职打卡管理</h1>
       <div>
-        <button class="logout-btn" onclick="showChangePwd()" style="margin-right:8px">修改密码</button>
-        <button class="logout-btn" onclick="doLogout()">退出登录</button>
+        <button class="btn-outline" onclick="showChangePwd()" style="margin-right:8px">修改密码</button>
+        <button class="btn-outline" onclick="doLogout()">退出登录</button>
       </div>
     </div>
 
@@ -32,8 +32,8 @@
       <div style="display:flex;gap:10px;flex-wrap:wrap">
         <input type="password" id="oldPwd" placeholder="原密码" style="padding:10px;border:1px solid #d0d7e2;border-radius:8px;font-size:14px">
         <input type="password" id="newPwd" placeholder="新密码" style="padding:10px;border:1px solid #d0d7e2;border-radius:8px;font-size:14px">
-        <button onclick="doChangePwd()" style="padding:10px 20px;background:#4a90d9;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px">确认修改</button>
-        <button onclick="document.getElementById('changePwdBox').style.display='none'" style="padding:10px 20px;background:#eee;border:none;border-radius:8px;cursor:pointer;font-size:14px">取消</button>
+        <button class="btn-primary" onclick="doChangePwd()">确认修改</button>
+        <button class="btn-outline" onclick="document.getElementById('changePwdBox').style.display='none'">取消</button>
       </div>
       <p id="changePwdMsg" style="margin-top:10px;font-size:13px"></p>
     </div>
@@ -66,7 +66,7 @@
           <select id="rosterStore"><option value="">选择门店</option></select>
           <input type="text" id="rosterName" placeholder="员工姓名" style="min-width:100px">
           <input type="tel" id="rosterPhone" placeholder="手机号" style="min-width:140px" maxlength="11">
-          <button onclick="addRoster()">添加</button>
+          <button class="btn-primary" onclick="addRoster()">添加</button>
         </div>
       </div>
       <div class="roster-section">
@@ -76,7 +76,7 @@
           <select id="batchStore"><option value="">选择门店</option></select>
         </div>
         <textarea id="batchText" placeholder="张三,13800001111&#10;李四,13800002222&#10;王五,13800003333" style="width:100%;height:120px;padding:12px;font-size:14px;border:1px solid #d0d7e2;border-radius:8px;outline:none;resize:vertical;margin-bottom:8px"></textarea>
-        <button onclick="batchImport()" style="padding:10px 24px;font-size:14px;font-weight:500;background:#4a90d9;color:#fff;border:none;border-radius:8px;cursor:pointer">批量导入</button>
+        <button class="btn-primary" onclick="batchImport()">批量导入</button>
         <span id="batchMsg" style="margin-left:12px;font-size:13px;color:#888"></span>
       </div>
       <div class="roster-section">
@@ -94,7 +94,7 @@
           <input type="text" id="newStoreName" placeholder="门店名称">
           <input type="text" id="newStoreLat" placeholder="纬度（如 39.9042）" style="width:150px">
           <input type="text" id="newStoreLng" placeholder="经度（如 116.4074）" style="width:150px">
-          <button onclick="addStore()">添加门店</button>
+          <button class="btn-primary" onclick="addStore()">添加门店</button>
         </div>
         <p style="font-size:12px;color:#999;margin:-8px 0 12px">
           经纬度在百度地图或高德地图上右键点击门店位置即可复制
@@ -113,7 +113,7 @@
         <p style="font-size:13px;color:#999;margin-bottom:12px">设置一个密钥，二维码每日自动变化，无需手动刷新</p>
         <div style="display:flex;gap:10px">
           <input type="text" id="secretInput" placeholder="输入任意字符串作为密钥" style="flex:1;padding:10px 14px;font-size:14px;border:1px solid #d0d7e2;border-radius:8px;outline:none">
-          <button onclick="saveSecret()" style="padding:10px 20px;font-size:14px;font-weight:500;background:#4a90d9;color:#fff;border:none;border-radius:8px;cursor:pointer;white-space:nowrap">保存密钥</button>
+          <button class="btn-primary" onclick="saveSecret()">保存密钥</button>
         </div>
         <p id="secretMsg" style="font-size:13px;margin-top:8px"></p>
       </div>
@@ -253,7 +253,7 @@
             '<td>' + fmtTime(ci) + '</td>' +
             '<td>' + fmtTime(co) + '</td>' +
             '<td class="hours">' + (co ? calcHoursStr(ci, co) : '<span style="color:#e65100">在岗中</span>') + '</td>' +
-            '<td><button onclick="deleteRecord(\'' + r.id + '\')" style="padding:4px 10px;font-size:12px;background:#fce4ec;color:#c62828;border:none;border-radius:4px;cursor:pointer">删除</button></td>' +
+            '<td><button class="btn-danger" onclick="deleteRecord(\'' + r.id + '\')">删除</button></td>' +
             '</tr>';
         }).join('') + '</tbody></table>';
     }
@@ -347,8 +347,8 @@
                 '<td>' + escHtml(gSN(i.store_id)) + '</td>' +
                 '<td>' + escHtml(i.name) + '</td>' +
                 '<td><input type="tel" id="phone-' + i.id + '" value="' + (i.phone || '') + '" placeholder="未录入" style="width:130px;padding:4px 8px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none"></td>' +
-                '<td><button onclick="savePhone(\'' + i.id + '\')" style="padding:4px 12px;font-size:12px;background:#e8f5e9;color:#2e7d32;border:none;border-radius:4px;cursor:pointer;margin-right:4px">保存</button>' +
-                '<button onclick="delRoster(\'' + i.id + '\')" style="padding:4px 10px;font-size:12px;background:#fce4ec;color:#c62828;border:none;border-radius:4px;cursor:pointer">删除</button></td>' +
+                '<td><button class="btn-success" onclick="savePhone(\'' + i.id + '\')" style="margin-right:4px">保存</button>' +
+                '<button class="btn-danger" onclick="delRoster(\'' + i.id + '\')">删除</button></td>' +
                 '</tr>';
             }).join('') + '</tbody></table>';
         });
