@@ -10,7 +10,7 @@
 
   <!-- 登录界面 -->
   <div class="admin-login" id="loginBox">
-    <h1>🔐 管理后台</h1>
+    <h1>管理后台</h1>
     <input type="password" id="pwdInput" placeholder="请输入管理密码" onkeydown="if(event.key==='Enter')doLogin()">
     <button onclick="doLogin()">登 录</button>
     <p id="loginError" style="color:#f44336;margin-top:12px;font-size:14px;display:none"></p>
@@ -20,7 +20,7 @@
   <div id="mainBox" style="display:none">
 
     <div class="admin-header">
-      <h1>📋 兼职打卡管理</h1>
+      <h1>兼职打卡管理</h1>
       <div>
         <button class="logout-btn" onclick="showChangePwd()" style="margin-right:8px">修改密码</button>
         <button class="logout-btn" onclick="doLogout()">退出登录</button>
@@ -80,10 +80,15 @@
       <div class="store-mgmt-section">
         <h3>新增门店</h3>
         <div class="store-add">
-          <input type="text" id="newStoreId" placeholder="门店ID（英文，如 beijing）">
-          <input type="text" id="newStoreName" placeholder="门店名称（如 北京门店）">
+          <input type="text" id="newStoreId" placeholder="门店ID（英文）">
+          <input type="text" id="newStoreName" placeholder="门店名称">
+          <input type="text" id="newStoreLat" placeholder="纬度（如 39.9042）" style="width:150px">
+          <input type="text" id="newStoreLng" placeholder="经度（如 116.4074）" style="width:150px">
           <button onclick="addStore()">添加门店</button>
         </div>
+        <p style="font-size:12px;color:#999;margin:-8px 0 12px">
+          经纬度在百度地图或高德地图上右键点击门店位置即可复制
+        </p>
       </div>
       <div class="store-mgmt-section">
         <h3>现有门店</h3>
@@ -93,9 +98,11 @@
 
     <!-- 二维码 -->
     <div class="tab-content" id="tab-qrcode" style="display:none">
-      <p style="margin-bottom:16px;color:#666;font-size:14px">
-        打印以下二维码贴在各门店入口，员工扫码即可打卡。<br>
+      <p style="margin-bottom:8px;color:#666;font-size:14px">
         打卡链接：<code id="baseUrlDisplay" style="background:#f0f0f0;padding:2px 6px;border-radius:4px"></code>
+      </p>
+      <p style="margin-bottom:16px;color:#e65100;font-size:13px">
+        每个门店每天生成一个随机码，旧码失效。建议每天上班前刷新。
       </p>
       <div class="qr-section" id="qrContainer"><div class="loading">加载中</div></div>
     </div>
@@ -107,15 +114,12 @@
   <script src="js/config.js"></script>
   <script>
   (function() {
-    var loggedIn = false;
-
     // ====== 登录 ======
     window.doLogin = function() {
       var pwd = document.getElementById('pwdInput').value.trim();
       if (!pwd) return;
       checkPassword(pwd).then(function(ok) {
         if (ok) {
-          loggedIn = true;
           sessionStorage.setItem('admin-logged-in', '1');
           document.getElementById('loginBox').style.display = 'none';
           document.getElementById('mainBox').style.display = '';
@@ -137,18 +141,17 @@
 
     function checkPassword(pwd) {
       return db.from('app_config').select('*').limit(1).single()
-        .then(function(_ref) {
-          if (_ref.error && _ref.error.code === 'PGRST116') {
+        .then(function(r) {
+          if (r.error && r.error.code === 'PGRST116') {
             return db.from('app_config').insert({ admin_password: 'admin123' }).select().single()
-              .then(function(_ref2) { return _ref2.data && _ref2.data.admin_password === pwd; });
+              .then(function(r2) { return r2.data && r2.data.admin_password === pwd; });
           }
-          if (_ref.error) throw _ref.error;
-          return _ref.data && _ref.data.admin_password === pwd;
+          if (r.error) throw r.error;
+          return r.data && r.data.admin_password === pwd;
         });
     }
 
     if (sessionStorage.getItem('admin-logged-in') === '1') {
-      loggedIn = true;
       document.getElementById('loginBox').style.display = 'none';
       document.getElementById('mainBox').style.display = '';
       initMain();
@@ -159,16 +162,16 @@
       var today = dateStr(new Date());
       document.getElementById('filterDateFrom').value = today;
       document.getElementById('filterDateTo').value = today;
-      var base = location.origin + location.pathname.replace(/admin\.html$/, 'index.html');
-      document.getElementById('baseUrlDisplay').textContent = base + '?store=门店ID';
+      document.getElementById('baseUrlDisplay').textContent =
+        location.origin + location.pathname.replace(/admin\.html$/, 'index.html') + '?store=门店ID&code=xxx';
       loadStores();
     }
 
     function loadStores() {
       return db.from('store').select('*').order('store_id')
-        .then(function(_ref3) {
-          if (_ref3.error) throw _ref3.error;
-          window._stores = _ref3.data || [];
+        .then(function(r) {
+          if (r.error) throw r.error;
+          window._stores = r.data || [];
           var opts = window._stores.map(function(s) {
             return '<option value="' + s.store_id + '">' + s.name + '</option>';
           }).join('');
@@ -186,15 +189,13 @@
       var filterStore = document.getElementById('filterStore').value;
       var dateFrom = document.getElementById('filterDateFrom').value;
       var dateTo = document.getElementById('filterDateTo').value;
-
       var query = db.from('check_record').select('*').order('check_in', { ascending: false }).limit(500);
       if (filterStore) query = query.eq('store_id', filterStore);
       if (dateFrom) query = query.gte('date', dateFrom);
       if (dateTo) query = query.lte('date', dateTo);
-
-      query.then(function(_ref4) {
-        if (_ref4.error) throw _ref4.error;
-        renderRecords(_ref4.data || []);
+      query.then(function(r) {
+        if (r.error) throw r.error;
+        renderRecords(r.data || []);
       }).catch(function(err) {
         document.getElementById('recordsContainer').innerHTML =
           '<div class="empty-state">加载失败: ' + (err.message || '网络错误') + '</div>';
@@ -207,8 +208,7 @@
         document.getElementById('summaryCards').innerHTML = '';
         return;
       }
-      var todayStr = dateStr(new Date());
-      var todayCount = 0, todayTotalMin = 0;
+      var todayStr = dateStr(new Date()), todayCount = 0, todayTotalMin = 0;
       records.forEach(function(r) {
         if (r.date === todayStr) todayCount++;
         if (r.date === todayStr && r.check_out) {
@@ -219,27 +219,23 @@
         '<div class="summary-card"><div class="num">' + records.length + '</div><div class="label">筛选记录数</div></div>' +
         '<div class="summary-card"><div class="num">' + todayCount + '</div><div class="label">今日打卡人次</div></div>' +
         '<div class="summary-card"><div class="num">' + fmtHoursMin(todayTotalMin) + '</div><div class="label">今日在岗总时长</div></div>';
-      var rows = records.map(function(r) {
-        var ci = new Date(r.check_in);
-        var co = r.check_out ? new Date(r.check_out) : null;
-        var hours = co ? calcHoursStr(ci, co) : '<span style="color:#e65100">在岗中</span>';
-        return '<tr>' +
-          '<td>' + escHtml(r.name) + '</td>' +
-          '<td>' + escHtml(getStoreName(r.store_id)) + '</td>' +
-          '<td>' + r.date + '</td>' +
-          '<td>' + fmtTime(ci) + '</td>' +
-          '<td>' + fmtTime(co) + '</td>' +
-          '<td class="hours">' + hours + '</td>' +
-          '<td><button onclick="deleteRecord(\'' + r.id + '\')" style="padding:4px 10px;font-size:12px;background:#fce4ec;color:#c62828;border:none;border-radius:4px;cursor:pointer">删除</button></td>' +
-          '</tr>';
-      }).join('');
       document.getElementById('recordsContainer').innerHTML =
-        '<table class="records-table">' +
-        '<thead><tr><th>姓名</th><th>门店</th><th>日期</th><th>到岗</th><th>离岗</th><th>在岗时长</th><th>操作</th></tr></thead>' +
-        '<tbody>' + rows + '</tbody></table>';
+        '<table class="records-table"><thead><tr><th>姓名</th><th>门店</th><th>日期</th><th>到岗</th><th>离岗</th><th>在岗时长</th><th>操作</th></tr></thead><tbody>' +
+        records.map(function(r) {
+          var ci = new Date(r.check_in), co = r.check_out ? new Date(r.check_out) : null;
+          return '<tr>' +
+            '<td>' + escHtml(r.name) + '</td>' +
+            '<td>' + escHtml(gSN(r.store_id)) + '</td>' +
+            '<td>' + r.date + '</td>' +
+            '<td>' + fmtTime(ci) + '</td>' +
+            '<td>' + fmtTime(co) + '</td>' +
+            '<td class="hours">' + (co ? calcHoursStr(ci, co) : '<span style="color:#e65100">在岗中</span>') + '</td>' +
+            '<td><button onclick="deleteRecord(\'' + r.id + '\')" style="padding:4px 10px;font-size:12px;background:#fce4ec;color:#c62828;border:none;border-radius:4px;cursor:pointer">删除</button></td>' +
+            '</tr>';
+        }).join('') + '</tbody></table>';
     }
 
-    // ====== 花名册管理 ======
+    // ====== 花名册 ======
     window.addRoster = function() {
       var storeId = document.getElementById('rosterStore').value;
       var name = document.getElementById('rosterName').value.trim();
@@ -247,40 +243,34 @@
       if (!storeId) { alert('请选择门店'); return; }
       if (!name) { alert('请输入姓名'); return; }
       if (phone && !/^1\d{10}$/.test(phone)) { alert('手机号格式不正确'); return; }
-
       db.from('roster').select('*').eq('store_id', storeId).eq('name', name).single()
-        .then(function(_ref5) {
-          if (_ref5.data) { alert('该员工已存在'); return Promise.reject('duplicate'); }
+        .then(function(r) {
+          if (r.data) { alert('该员工已存在'); return Promise.reject('dup'); }
           return db.from('roster').insert({ store_id: storeId, name: name, phone: phone || null });
-        }).then(function(result) {
-          if (result && result.error) throw result.error;
+        }).then(function(res) {
+          if (res && res.error) throw res.error;
           document.getElementById('rosterName').value = '';
           document.getElementById('rosterPhone').value = '';
           loadRosterList();
-        }).catch(function(err) {
-          if (err !== 'duplicate') alert('添加失败: ' + (err.message || '网络错误'));
-        });
+        }).catch(function(e) { if (e !== 'dup') alert('添加失败: ' + (e.message || '网络错误')); });
     };
 
     function loadRosterList() {
       document.getElementById('rosterListContainer').innerHTML = '<div class="loading">加载中</div>';
       db.from('roster').select('*').order('store_id').order('name')
-        .then(function(_ref6) {
-          if (_ref6.error) throw _ref6.error;
-          var list = _ref6.data || [];
+        .then(function(r) {
+          if (r.error) throw r.error;
+          var list = r.data || [];
           if (list.length === 0) {
-            document.getElementById('rosterListContainer').innerHTML = '<div class="empty-state">暂无员工，请先添加</div>';
+            document.getElementById('rosterListContainer').innerHTML = '<div class="empty-state">暂无员工</div>';
             return;
           }
-          var html = list.map(function(r) {
-            var phoneStr = r.phone ? ' 📱' + r.phone : ' （未录手机号）';
-            return '<div class="roster-item">' +
-              '<span>' + escHtml(r.name) + '</span>' +
-              '<span style="color:#999;font-size:12px">(' + getStoreName(r.store_id) + ')' + phoneStr + '</span>' +
-              '<button class="del-btn" onclick="delRoster(\'' + r.id + '\')">&times;</button>' +
-              '</div>';
-          }).join('');
-          document.getElementById('rosterListContainer').innerHTML = '<div class="roster-list">' + html + '</div>';
+          document.getElementById('rosterListContainer').innerHTML = '<div class="roster-list">' +
+            list.map(function(i) {
+              return '<div class="roster-item"><span>' + escHtml(i.name) + '</span>' +
+                '<span style="color:#999;font-size:12px">(' + gSN(i.store_id) + ') ' + (i.phone || '未录手机号') + '</span>' +
+                '<button class="del-btn" onclick="delRoster(\'' + i.id + '\')">&times;</button></div>';
+            }).join('') + '</div>';
         });
     }
 
@@ -288,128 +278,151 @@
     window.addStore = function() {
       var sid = document.getElementById('newStoreId').value.trim();
       var sname = document.getElementById('newStoreName').value.trim();
+      var lat = parseFloat(document.getElementById('newStoreLat').value.trim());
+      var lng = parseFloat(document.getElementById('newStoreLng').value.trim());
       if (!sid) { alert('请输入门店ID'); return; }
-      if (!/^[a-z][a-z0-9_]*$/.test(sid)) { alert('门店ID只能用小写字母、数字、下划线，且字母开头'); return; }
+      if (!/^[a-z][a-z0-9_]*$/.test(sid)) { alert('门店ID只能用小写字母、数字、下划线'); return; }
       if (!sname) { alert('请输入门店名称'); return; }
-
       db.from('store').select('*').eq('store_id', sid).single()
-        .then(function(_ref7) {
-          if (_ref7.data) { alert('该门店ID已存在'); return Promise.reject('duplicate'); }
-          return db.from('store').insert({ store_id: sid, name: sname });
-        }).then(function(result) {
-          if (result && result.error) throw result.error;
+        .then(function(r) {
+          if (r.data) { alert('该门店ID已存在'); return Promise.reject('dup'); }
+          return db.from('store').insert({
+            store_id: sid, name: sname,
+            lat: isNaN(lat) ? null : lat,
+            lng: isNaN(lng) ? null : lng
+          });
+        }).then(function(res) {
+          if (res && res.error) throw res.error;
           document.getElementById('newStoreId').value = '';
           document.getElementById('newStoreName').value = '';
+          document.getElementById('newStoreLat').value = '';
+          document.getElementById('newStoreLng').value = '';
           loadStores();
-        }).catch(function(err) {
-          if (err !== 'duplicate') alert('添加失败: ' + (err.message || '网络错误'));
-        });
+        }).catch(function(e) { if (e !== 'dup') alert('添加失败: ' + (e.message || '网络错误')); });
     };
 
     function loadStoreList() {
-      document.getElementById('storeListContainer').innerHTML = '';
       var stores = window._stores || [];
       if (stores.length === 0) {
         document.getElementById('storeListContainer').innerHTML = '<div class="empty-state">暂无门店</div>';
         return;
       }
-      var rows = stores.map(function(s, i) {
-        return '<tr>' +
-          '<td>' + escHtml(s.store_id) + '</td>' +
-          '<td>' + escHtml(s.name) + '</td>' +
-          '<td><button class="del-link" onclick="delStore(\'' + s.store_id + '\')">删除</button></td>' +
-          '</tr>';
-      }).join('');
       document.getElementById('storeListContainer').innerHTML =
-        '<table class="store-table">' +
-        '<thead><tr><th>门店ID</th><th>名称</th><th>操作</th></tr></thead>' +
-        '<tbody>' + rows + '</tbody></table>';
+        '<table class="store-table"><thead><tr><th>门店ID</th><th>名称</th><th>坐标</th><th>今日码</th><th>操作</th></tr></thead><tbody>' +
+        stores.map(function(s) {
+          var coord = (s.lat && s.lng) ? s.lat.toFixed(4) + ', ' + s.lng.toFixed(4) : '未设置';
+          return '<tr>' +
+            '<td>' + escHtml(s.store_id) + '</td>' +
+            '<td>' + escHtml(s.name) + '</td>' +
+            '<td>' + coord + '</td>' +
+            '<td>' + (s.daily_code || '--') + '</td>' +
+            '<td><button class="del-link" onclick="delStore(\'' + s.store_id + '\')">删除</button></td>' +
+            '</tr>';
+        }).join('') + '</tbody></table>';
     }
 
     window.delStore = function(sid) {
-      if (!confirm('删除门店将同时删除该门店的所有花名册和打卡记录，确认？')) return;
+      if (!confirm('删除门店将同时删除该门店的所有数据，确认？')) return;
       Promise.all([
         db.from('store').delete().eq('store_id', sid),
         db.from('roster').delete().eq('store_id', sid),
         db.from('check_record').delete().eq('store_id', sid)
-      ]).then(function() {
-        loadStores();
-      }).catch(function(err) {
-        alert('删除失败: ' + (err.message || '网络错误'));
-      });
+      ]).then(function() { loadStores(); })
+        .catch(function(e) { alert('删除失败: ' + (e.message || '网络错误')); });
     };
 
-    // ====== 删除记录/员工 ======
+    // ====== 删除 ======
     window.deleteRecord = function(id) {
-      if (!confirm('确认删除这条打卡记录？')) return;
+      if (!confirm('确认删除？')) return;
       db.from('check_record').delete().eq('id', id)
-        .then(function(_ref8) { if (_ref8.error) throw _ref8.error; loadRecords(); })
-        .catch(function(err) { alert('删除失败: ' + (err.message || '网络错误')); });
+        .then(function(r) { if (r.error) throw r.error; loadRecords(); })
+        .catch(function(e) { alert('删除失败: ' + (e.message || '网络错误')); });
     };
-
     window.delRoster = function(id) {
-      if (!confirm('确认删除该员工？')) return;
+      if (!confirm('确认删除？')) return;
       db.from('roster').delete().eq('id', id)
-        .then(function(_ref9) { if (_ref9.error) throw _ref9.error; loadRosterList(); })
-        .catch(function(err) { alert('删除失败: ' + (err.message || '网络错误')); });
+        .then(function(r) { if (r.error) throw r.error; loadRosterList(); })
+        .catch(function(e) { alert('删除失败: ' + (e.message || '网络错误')); });
     };
 
-    // ====== 修改密码 ======
+    // ====== 密码 ======
     window.showChangePwd = function() {
       document.getElementById('changePwdBox').style.display = '';
       document.getElementById('oldPwd').value = '';
       document.getElementById('newPwd').value = '';
       document.getElementById('changePwdMsg').textContent = '';
     };
-
     window.doChangePwd = function() {
       var oldPwd = document.getElementById('oldPwd').value.trim();
       var newPwd = document.getElementById('newPwd').value.trim();
-      if (!oldPwd || !newPwd) { setPwdMsg('请填写原密码和新密码', 'error'); return; }
-      if (newPwd.length < 4) { setPwdMsg('新密码至少4位', 'error'); return; }
+      if (!oldPwd || !newPwd) { pwdMsg('请填写完整', 0); return; }
+      if (newPwd.length < 4) { pwdMsg('新密码至少4位', 0); return; }
       db.from('app_config').select('*').limit(1).single()
-        .then(function(_ref10) {
-          if (_ref10.error || !_ref10.data) { setPwdMsg('配置不存在', 'error'); return Promise.reject('no'); }
-          if (_ref10.data.admin_password !== oldPwd) { setPwdMsg('原密码错误', 'error'); return Promise.reject('no'); }
-          return db.from('app_config').update({ admin_password: newPwd }).eq('id', _ref10.data.id);
-        }).then(function(result) {
-          if (result && result.error) throw result.error;
-          setPwdMsg('密码修改成功！', 'ok');
+        .then(function(r) {
+          if (r.error || !r.data) { pwdMsg('配置不存在', 0); return Promise.reject('x'); }
+          if (r.data.admin_password !== oldPwd) { pwdMsg('原密码错误', 0); return Promise.reject('x'); }
+          return db.from('app_config').update({ admin_password: newPwd }).eq('id', r.data.id);
+        }).then(function(res) {
+          if (res && res.error) throw res.error;
+          pwdMsg('密码修改成功！', 1);
           setTimeout(function() { document.getElementById('changePwdBox').style.display = 'none'; }, 1500);
-        }).catch(function(err) {
-          if (err !== 'no') setPwdMsg('修改失败: ' + (err.message || '网络错误'), 'error');
+        }).catch(function(e) { if (e !== 'x') pwdMsg('修改失败: ' + (e.message || '网络错误'), 0); });
+    };
+    function pwdMsg(msg, ok) {
+      var el = document.getElementById('changePwdMsg');
+      el.textContent = msg; el.style.color = ok ? '#4caf50' : '#f44336';
+    }
+
+    // ====== 二维码 & 每日码 ======
+    window.refreshDailyCode = function(sid) {
+      var code = Math.random().toString(36).substring(2, 8).toUpperCase();
+      db.from('store').update({ daily_code: code, daily_code_time: new Date().toISOString() })
+        .eq('store_id', sid).then(function(r) {
+          if (r.error) { alert('刷新失败: ' + r.error.message); return; }
+          loadQRCodes();
         });
     };
-    function setPwdMsg(msg, type) {
-      var el = document.getElementById('changePwdMsg');
-      el.textContent = msg; el.style.color = type === 'ok' ? '#4caf50' : '#f44336';
-    }
 
-    // ====== 二维码 ======
     function loadQRCodes() {
       document.getElementById('qrContainer').innerHTML = '<div class="loading">加载中</div>';
-      var baseUrl = location.origin + location.pathname.replace(/admin\.html$/, 'index.html');
-      document.getElementById('baseUrlDisplay').textContent = baseUrl + '?store=门店ID';
-      var stores = window._stores || [];
-      if (stores.length === 0) {
-        document.getElementById('qrContainer').innerHTML = '<div class="empty-state">暂无门店，请先在"门店管理"中添加</div>';
-        return;
-      }
-      var html = stores.map(function(s) {
-        return '<div class="qr-card"><h4>' + escHtml(s.name) + '</h4>' +
-          '<div id="qr-' + s.store_id + '"></div>' +
-          '<div class="qr-hint">链接: ' + baseUrl + '?store=' + s.store_id + '</div></div>';
-      }).join('');
-      document.getElementById('qrContainer').innerHTML = html;
-      setTimeout(function() {
-        stores.forEach(function(s) {
-          var el = document.getElementById('qr-' + s.store_id);
-          if (el) new QRCode(el, { text: baseUrl + '?store=' + s.store_id, width: 180, height: 180, colorDark: '#000', colorLight: '#fff' });
-        });
-      }, 100);
+      // 先重新加载门店数据
+      db.from('store').select('*').order('store_id').then(function(r) {
+        if (r.error) throw r.error;
+        window._stores = r.data || [];
+        var baseUrl = location.origin + location.pathname.replace(/admin\.html$/, 'index.html');
+        var stores = window._stores;
+        if (stores.length === 0) {
+          document.getElementById('qrContainer').innerHTML = '<div class="empty-state">暂无门店，请先在"门店管理"中添加</div>';
+          return;
+        }
+        var html = stores.map(function(s) {
+          var code = s.daily_code || '';
+          var qrUrl = baseUrl + '?store=' + s.store_id + (code ? '&code=' + code : '');
+          var codeInfo = code
+            ? '<span style="color:#4caf50">今日码: ' + code + '</span>'
+            : '<span style="color:#e65100">未设置每日码</span>';
+          return '<div class="qr-card"><h4>' + escHtml(s.name) + '</h4>' +
+            '<div id="qr-' + s.store_id + '"></div>' +
+            '<div class="qr-hint">' + codeInfo + '</div>' +
+            '<div class="qr-hint">' + qrUrl + '</div>' +
+            '<button onclick="refreshDailyCode(\'' + s.store_id + '\')" style="margin-top:8px;padding:6px 16px;font-size:13px;background:#4a90d9;color:#fff;border:none;border-radius:6px;cursor:pointer">刷新今日码</button>' +
+            '</div>';
+        }).join('');
+        document.getElementById('qrContainer').innerHTML = html;
+        setTimeout(function() {
+          stores.forEach(function(s) {
+            var code = s.daily_code || '';
+            var el = document.getElementById('qr-' + s.store_id);
+            if (el) new QRCode(el, {
+              text: baseUrl + '?store=' + s.store_id + (code ? '&code=' + code : ''),
+              width: 180, height: 180, colorDark: '#000', colorLight: '#fff'
+            });
+          });
+        }, 100);
+      });
     }
 
-    // ====== Tab切换 ======
+    // ====== Tab ======
     window.switchTab = function(tab) {
       document.querySelectorAll('.tab-nav button').forEach(function(b) {
         b.className = b.dataset.tab === tab ? 'active' : '';
@@ -427,22 +440,11 @@
     function calcHoursStr(s, e) {
       if (!s || !e) return '--';
       var m = Math.floor((e.getTime()-s.getTime())/60000);
-      var h = Math.floor(m/60); m = m%60;
-      return h>0 ? h+'h '+m+'min' : m+'min';
+      return m>=60 ? Math.floor(m/60)+'h '+m%60+'min' : m+'min';
     }
-    function fmtHoursMin(t) {
-      if (t<=0) return '--';
-      var h = Math.floor(t/60), m = Math.round(t%60);
-      return h>0 ? h+'h '+m+'min' : m+'min';
-    }
-    function getStoreName(sid) {
-      var s = (window._stores||[]).filter(function(s){return s.store_id===sid})[0];
-      return s ? s.name : sid;
-    }
-    function escHtml(s) {
-      if (!s) return '';
-      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    }
+    function fmtHoursMin(t) { if (t<=0) return '--'; var h=Math.floor(t/60); return h>0?h+'h '+Math.round(t%60)+'min':Math.round(t)+'min'; }
+    function gSN(sid) { var s=(window._stores||[]).filter(function(x){return x.store_id===sid})[0]; return s?s.name:sid; }
+    function escHtml(s) { if (!s) return ''; return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   })();
   </script>
 </body>

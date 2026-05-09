@@ -25,6 +25,12 @@
     <p id="phoneError" style="color:#f44336;font-size:13px;margin-top:10px;display:none"></p>
   </div>
 
+  <!-- 验证中 -->
+  <div class="phone-verify" id="verifyLoading" style="display:none">
+    <div class="loading"></div>
+    <p class="hint" id="verifyMsg">验证中...</p>
+  </div>
+
   <!-- 打卡状态 -->
   <div class="checkin-status" id="statusArea" style="display:none">
     <div class="welcome-text">你好，<span class="name" id="empName"></span></div>
@@ -47,6 +53,9 @@
   <script>
   (function() {
     var storeId = getParam('store');
+    var urlCode = getParam('code') || '';
+    var GPS_RADIUS = 500; // 允许的定位误差（米）
+
     if (!storeId) {
       showError('请扫描正确的门店二维码');
       return;
@@ -55,12 +64,20 @@
     var currentName = null;
     var currentPhone = null;
     var currentRecord = null;
-    var phoneToName = {};  // phone → name
+    var phoneToName = {};
+    var storeLat = null;
+    var storeLng = null;
+    var storeDailyCode = null;
 
     init();
 
     function init() {
       loadStore().then(function() {
+        // 验证动态码
+        if (storeDailyCode && storeDailyCode !== urlCode) {
+          showError('二维码已失效', '请扫描今日最新二维码');
+          return;
+        }
         return loadRoster();
       }).then(function() {
         var phones = Object.keys(phoneToName);
@@ -71,16 +88,15 @@
         }
         var savedPhone = localStorage.getItem(saveKey());
         if (savedPhone && phoneToName[savedPhone]) {
-          // 已记住且手机号仍在花名册中
           currentPhone = savedPhone;
           currentName = phoneToName[savedPhone];
-          showStatus();
+          verifyLocation().then(function() { showStatus(); });
         } else {
           if (savedPhone) localStorage.removeItem(saveKey());
           showPhoneInput();
         }
       }).catch(function(err) {
-        showError('加载失败: ' + (err.message || '网络错误'));
+        showError('加载失败', err.message || '网络错误');
       });
     }
 
@@ -90,6 +106,9 @@
           if (_ref.error || !_ref.data) throw new Error('门店不存在');
           document.getElementById('storeName').textContent = _ref.data.name;
           document.getElementById('storeTag').textContent = storeId;
+          storeLat = _ref.data.lat || null;
+          storeLng = _ref.data.lng || null;
+          storeDailyCode = _ref.data.daily_code || null;
         });
     }
 
@@ -105,16 +124,15 @@
     }
 
     function showPhoneInput() {
+      hideAll();
       document.getElementById('phoneArea').style.display = '';
-      document.getElementById('statusArea').style.display = 'none';
-      document.getElementById('actionArea').style.display = 'none';
       document.getElementById('phoneInput').value = '';
       document.getElementById('phoneError').style.display = 'none';
-      document.getElementById('phoneInput').focus();
+      setTimeout(function() { document.getElementById('phoneInput').focus(); }, 300);
     }
 
     function showStatus() {
-      document.getElementById('phoneArea').style.display = 'none';
+      hideAll();
       document.getElementById('empName').textContent = currentName;
       document.getElementById('phoneDisplay').textContent = currentPhone ? maskPhone(currentPhone) : '';
       document.getElementById('statusArea').style.display = '';
@@ -122,6 +140,73 @@
       loadCheckStatus();
     }
 
+    function hideAll() {
+      document.getElementById('phoneArea').style.display = 'none';
+      document.getElementById('verifyLoading').style.display = 'none';
+      document.getElementById('statusArea').style.display = 'none';
+      document.getElementById('actionArea').style.display = 'none';
+    }
+
+    // --- 位置验证 ---
+    function verifyLocation() {
+      return new Promise(function(resolve, reject) {
+        if (!storeLat || !storeLng) {
+          // 门店未设置坐标，跳过GPS验证
+          resolve();
+          return;
+        }
+        if (!navigator.geolocation) {
+          showError('定位不可用', '请使用支持GPS的浏览器');
+          reject(new Error('geolocation not supported'));
+          return;
+        }
+        hideAll();
+        document.getElementById('verifyLoading').style.display = '';
+        document.getElementById('verifyMsg').textContent = '正在获取位置...';
+        navigator.geolocation.getCurrentPosition(function(pos) {
+          var dist = haversine(storeLat, storeLng, pos.coords.latitude, pos.coords.longitude);
+          if (dist <= GPS_RADIUS) {
+            resolve();
+          } else {
+            showError('不在打卡范围内', '你距门店约' + Math.round(dist) + '米，超出允许范围');
+            reject(new Error('out of range'));
+          }
+        }, function(err) {
+          var msg;
+          switch (err.code) {
+            case 1: msg = '请允许定位权限后重试'; break;
+            case 2: msg = '无法获取位置，请检查GPS'; break;
+            case 3: msg = '定位超时，请重试'; break;
+            default: msg = '定位失败';
+          }
+          showError('定位失败', msg);
+          reject(err);
+        }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+      });
+    }
+
+    // --- 手机号登录 ---
+    window.doPhoneLogin = function() {
+      var phone = document.getElementById('phoneInput').value.trim();
+      if (!phone) return;
+      if (!/^1\d{10}$/.test(phone)) {
+        document.getElementById('phoneError').textContent = '请输入正确的11位手机号';
+        document.getElementById('phoneError').style.display = '';
+        return;
+      }
+      var name = phoneToName[phone];
+      if (!name) {
+        document.getElementById('phoneError').textContent = '该手机号不在花名册中，请联系管理员';
+        document.getElementById('phoneError').style.display = '';
+        return;
+      }
+      currentPhone = phone;
+      currentName = name;
+      localStorage.setItem(saveKey(), phone);
+      verifyLocation().then(function() { showStatus(); }).catch(function() {});
+    };
+
+    // --- 打卡状态 ---
     function loadCheckStatus() {
       var today = dateStr(new Date());
       db.from('check_record').select('*')
@@ -183,27 +268,6 @@
       document.getElementById('btnCheckout').style.display = 'none';
     }
 
-    // --- 手机号登录 ---
-    window.doPhoneLogin = function() {
-      var phone = document.getElementById('phoneInput').value.trim();
-      if (!phone) return;
-      if (!/^1\d{10}$/.test(phone)) {
-        document.getElementById('phoneError').textContent = '请输入正确的11位手机号';
-        document.getElementById('phoneError').style.display = '';
-        return;
-      }
-      var name = phoneToName[phone];
-      if (!name) {
-        document.getElementById('phoneError').textContent = '该手机号不在花名册中，请联系管理员';
-        document.getElementById('phoneError').style.display = '';
-        return;
-      }
-      currentPhone = phone;
-      currentName = name;
-      localStorage.setItem(saveKey(), phone);
-      showStatus();
-    };
-
     // --- 打卡操作 ---
     window.doCheckIn = function() {
       var now = new Date();
@@ -245,6 +309,17 @@
       showPhoneInput();
     };
 
+    // --- GPS距离计算 (Haversine) ---
+    function haversine(lat1, lng1, lat2, lng2) {
+      var R = 6371000; // 地球半径（米）
+      var dLat = (lat2 - lat1) * Math.PI / 180;
+      var dLng = (lng2 - lng1) * Math.PI / 180;
+      var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) *
+        Math.sin(dLng/2) * Math.sin(dLng/2);
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+
     // --- 工具 ---
     function saveKey() { return 'att-phone-' + storeId; }
     function getParam(n) { return new URLSearchParams(location.search).get(n); }
@@ -266,9 +341,10 @@
       if (!p || p.length < 7) return p;
       return p.substring(0, 3) + '****' + p.substring(7);
     }
-    function showError(msg) {
-      document.getElementById('storeName').textContent = '出错了';
-      document.getElementById('storeTag').textContent = msg;
+    function showError(title, detail) {
+      hideAll();
+      document.getElementById('storeName').textContent = title || '出错了';
+      document.getElementById('storeTag').textContent = detail || '';
     }
     function toast(msg, type) {
       type = type || 'success';
