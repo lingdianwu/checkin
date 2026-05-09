@@ -14,21 +14,15 @@
     <div class="store-tag" id="storeTag"></div>
   </div>
 
-  <!-- 员工选择 -->
-  <div class="employee-picker" id="pickerArea" style="display:none">
-    <h2>请选择你的姓名</h2>
-    <div class="name-list" id="nameList"></div>
-  </div>
-
-  <!-- 手机验证 -->
-  <div class="phone-verify" id="verifyArea" style="display:none">
-    <h2>身份验证</h2>
-    <p class="hint">请输入 <strong id="verifyName"></strong> 的手机号</p>
+  <!-- 手机号输入 -->
+  <div class="phone-verify" id="phoneArea" style="display:none">
+    <h2>请输入你的手机号</h2>
+    <p class="hint">系统将自动识别你的身份</p>
     <div class="phone-input-wrap">
-      <input type="tel" id="phoneInput" placeholder="输入11位手机号" maxlength="11" onkeydown="if(event.key==='Enter')doVerify()">
-      <button onclick="doVerify()">验证</button>
+      <input type="tel" id="phoneInput" placeholder="输入11位手机号" maxlength="11" onkeydown="if(event.key==='Enter')doPhoneLogin()">
+      <button onclick="doPhoneLogin()">确认</button>
     </div>
-    <p id="verifyError" style="color:#f44336;font-size:13px;margin-top:10px;display:none"></p>
+    <p id="phoneError" style="color:#f44336;font-size:13px;margin-top:10px;display:none"></p>
   </div>
 
   <!-- 打卡状态 -->
@@ -43,7 +37,7 @@
   <div class="action-area" id="actionArea" style="display:none">
     <button class="btn-checkin" id="btnCheckin" onclick="doCheckIn()">到岗签到</button>
     <button class="btn-checkout" id="btnCheckout" onclick="doCheckOut()">离岗签退</button>
-    <button class="btn-change-name" id="btnChange" onclick="clearName()">切换姓名</button>
+    <button class="btn-change-name" id="btnChange" onclick="clearIdentity()">切换身份</button>
   </div>
 
   <div class="footer-info">兼职在岗打卡系统</div>
@@ -59,8 +53,9 @@
     }
 
     var currentName = null;
+    var currentPhone = null;
     var currentRecord = null;
-    var rosterMap = {};  // name → phone
+    var phoneToName = {};  // phone → name
 
     init();
 
@@ -68,20 +63,21 @@
       loadStore().then(function() {
         return loadRoster();
       }).then(function() {
-        var names = Object.keys(rosterMap);
-        if (names.length === 0) {
+        var phones = Object.keys(phoneToName);
+        if (phones.length === 0) {
           document.getElementById('storeName').textContent = '暂无花名册';
           document.getElementById('storeTag').textContent = '请联系管理员添加员工';
           return;
         }
-        var saved = getSaved();
-        if (saved && rosterMap[saved.name] && rosterMap[saved.name] === saved.phone) {
-          // 已记住且手机号与花名册一致
-          currentName = saved.name;
+        var savedPhone = localStorage.getItem(saveKey());
+        if (savedPhone && phoneToName[savedPhone]) {
+          // 已记住且手机号仍在花名册中
+          currentPhone = savedPhone;
+          currentName = phoneToName[savedPhone];
           showStatus();
         } else {
-          if (saved) clearSaved();
-          showPicker(names);
+          if (savedPhone) localStorage.removeItem(saveKey());
+          showPhoneInput();
         }
       }).catch(function(err) {
         showError('加载失败: ' + (err.message || '网络错误'));
@@ -98,32 +94,29 @@
     }
 
     function loadRoster() {
-      return db.from('roster').select('name,phone').eq('store_id', storeId).order('name')
+      return db.from('roster').select('name,phone').eq('store_id', storeId)
         .then(function(_ref2) {
           if (_ref2.error) throw _ref2.error;
-          rosterMap = {};
-          (_ref2.data || []).forEach(function(r) { rosterMap[r.name] = r.phone || ''; });
+          phoneToName = {};
+          (_ref2.data || []).forEach(function(r) {
+            if (r.phone) phoneToName[r.phone] = r.name;
+          });
         });
     }
 
-    function showPicker(names) {
-      document.getElementById('pickerArea').style.display = '';
-      document.getElementById('verifyArea').style.display = 'none';
+    function showPhoneInput() {
+      document.getElementById('phoneArea').style.display = '';
       document.getElementById('statusArea').style.display = 'none';
       document.getElementById('actionArea').style.display = 'none';
-      document.getElementById('nameList').innerHTML = names.map(function(n) {
-        return '<button class="name-btn" onclick="pickName(\'' + esc(n) + '\')">' + escHtml(n) + '</button>';
-      }).join('');
+      document.getElementById('phoneInput').value = '';
+      document.getElementById('phoneError').style.display = 'none';
+      document.getElementById('phoneInput').focus();
     }
 
     function showStatus() {
-      document.getElementById('pickerArea').style.display = 'none';
-      document.getElementById('verifyArea').style.display = 'none';
+      document.getElementById('phoneArea').style.display = 'none';
       document.getElementById('empName').textContent = currentName;
-      var saved = getSaved();
-      if (saved && saved.phone) {
-        document.getElementById('phoneDisplay').textContent = maskPhone(saved.phone);
-      }
+      document.getElementById('phoneDisplay').textContent = currentPhone ? maskPhone(currentPhone) : '';
       document.getElementById('statusArea').style.display = '';
       document.getElementById('actionArea').style.display = '';
       loadCheckStatus();
@@ -190,48 +183,24 @@
       document.getElementById('btnCheckout').style.display = 'none';
     }
 
-    // --- 姓名选择 → 进入手机验证 ---
-    window.pickName = function(name) {
+    // --- 手机号登录 ---
+    window.doPhoneLogin = function() {
+      var phone = document.getElementById('phoneInput').value.trim();
+      if (!phone) return;
+      if (!/^1\d{10}$/.test(phone)) {
+        document.getElementById('phoneError').textContent = '请输入正确的11位手机号';
+        document.getElementById('phoneError').style.display = '';
+        return;
+      }
+      var name = phoneToName[phone];
+      if (!name) {
+        document.getElementById('phoneError').textContent = '该手机号不在花名册中，请联系管理员';
+        document.getElementById('phoneError').style.display = '';
+        return;
+      }
+      currentPhone = phone;
       currentName = name;
-      var phone = rosterMap[name];
-      document.getElementById('pickerArea').style.display = 'none';
-      document.getElementById('statusArea').style.display = 'none';
-      document.getElementById('actionArea').style.display = 'none';
-
-      if (!phone) {
-        // 花名册没录手机号 → 跳过验证
-        showStatus();
-        return;
-      }
-
-      var saved = getSaved();
-      if (saved && saved.name === name && saved.phone === phone) {
-        // 已通过验证
-        showStatus();
-        return;
-      }
-
-      // 需要验证手机号
-      document.getElementById('verifyName').textContent = name;
-      document.getElementById('phoneInput').value = '';
-      document.getElementById('verifyError').style.display = 'none';
-      document.getElementById('verifyArea').style.display = '';
-      document.getElementById('phoneInput').focus();
-    };
-
-    // --- 手机验证 ---
-    window.doVerify = function() {
-      var input = document.getElementById('phoneInput').value.trim();
-      if (!input) return;
-      var expected = rosterMap[currentName];
-      if (input !== expected) {
-        document.getElementById('verifyError').textContent = '手机号不匹配，请重新输入';
-        document.getElementById('verifyError').style.display = '';
-        document.getElementById('phoneInput').value = '';
-        document.getElementById('phoneInput').focus();
-        return;
-      }
-      saveIdentity(currentName, expected);
+      localStorage.setItem(saveKey(), phone);
       showStatus();
     };
 
@@ -268,26 +237,16 @@
         });
     };
 
-    window.clearName = function() {
-      clearSaved();
+    window.clearIdentity = function() {
+      localStorage.removeItem(saveKey());
       currentName = null;
+      currentPhone = null;
       currentRecord = null;
-      loadRoster().then(function() {
-        showPicker(Object.keys(rosterMap));
-      });
+      showPhoneInput();
     };
 
-    // --- 本地存储 ---
-    function saveKey() { return 'att-identity-' + storeId; }
-    function getSaved() {
-      try { return JSON.parse(localStorage.getItem(saveKey())); } catch(e) { return null; }
-    }
-    function saveIdentity(name, phone) {
-      localStorage.setItem(saveKey(), JSON.stringify({ name: name, phone: phone }));
-    }
-    function clearSaved() { localStorage.removeItem(saveKey()); }
-
     // --- 工具 ---
+    function saveKey() { return 'att-phone-' + storeId; }
     function getParam(n) { return new URLSearchParams(location.search).get(n); }
     function dateStr(d) {
       return d.getFullYear() + '-' + ('0'+(d.getMonth()+1)).slice(-2) + '-' + ('0'+d.getDate()).slice(-2);
@@ -307,8 +266,6 @@
       if (!p || p.length < 7) return p;
       return p.substring(0, 3) + '****' + p.substring(7);
     }
-    function esc(s) { return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
-    function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
     function showError(msg) {
       document.getElementById('storeName').textContent = '出错了';
       document.getElementById('storeTag').textContent = msg;
