@@ -11,6 +11,9 @@
   <!-- 登录界面 -->
   <div class="admin-login" id="loginBox">
     <h1>管理后台</h1>
+    <select id="loginStore" style="width:100%;padding:12px;font-size:15px;border:2px solid #d0d7e2;border-radius:10px;outline:none;margin-bottom:10px;background:#fff">
+      <option value="">超级管理员（全部门店）</option>
+    </select>
     <input type="password" id="pwdInput" placeholder="请输入管理密码" onkeydown="if(event.key==='Enter')doLogin()">
     <button onclick="doLogin()">登 录</button>
     <p id="loginError" style="color:#f44336;margin-top:12px;font-size:14px;display:none"></p>
@@ -72,13 +75,13 @@
       </div>
       <div class="roster-section">
         <h3>批量导入</h3>
-        <p style="font-size:12px;color:#999;margin-bottom:8px">格式：<b>姓名,手机号</b> 每行一个</p>
+        <p style="font-size:12px;color:#999;margin-bottom:8px">Excel 第一列为<b>姓名</b>，第二列为<b>手机号</b>（需含表头行）</p>
         <div class="roster-add">
           <select id="batchStore"><option value="">选择门店</option></select>
+          <input type="file" id="excelFile" accept=".xlsx,.xls" style="flex:1">
+          <button class="btn-primary" onclick="batchImportExcel()">导入 Excel</button>
         </div>
-        <textarea id="batchText" placeholder="张三,13800001111&#10;李四,13800002222&#10;王五,13800003333" style="width:100%;height:120px;padding:12px;font-size:14px;border:1px solid #d0d7e2;border-radius:8px;outline:none;resize:vertical;margin-bottom:8px"></textarea>
-        <button class="btn-primary" onclick="batchImport()">批量导入</button>
-        <span id="batchMsg" style="margin-left:12px;font-size:13px;color:#888"></span>
+        <span id="batchMsg" style="font-size:13px;color:#888"></span>
       </div>
       <div class="roster-section">
         <h3>员工列表</h3>
@@ -95,6 +98,7 @@
           <input type="text" id="newStoreName" placeholder="门店名称">
           <input type="text" id="newStoreLat" placeholder="纬度（如 39.9042）" style="width:150px">
           <input type="text" id="newStoreLng" placeholder="经度（如 116.4074）" style="width:150px">
+          <input type="password" id="newStorePwd" placeholder="管理员密码（可选）" style="width:150px">
           <button class="btn-primary" onclick="addStore()">添加门店</button>
         </div>
         <p style="font-size:12px;color:#999;margin:-8px 0 12px">
@@ -147,35 +151,58 @@
 
   <script src="js/supabase.min.js"></script>
   <script src="js/qrcode.min.js"></script>
+  <script src="js/xlsx.full.min.js"></script>
   <script src="js/config.js"></script>
   <script>
   (function() {
     // ====== 登录 ======
+    var gAdminStoreId = ''; // 空=超级管理员，非空=门店管理员
+
+    // 加载登录页门店列表
+    db.from('store').select('store_id,name').order('store_id').then(function(r) {
+      if (r.error) return;
+      (r.data || []).forEach(function(s) {
+        var opt = document.createElement('option');
+        opt.value = s.store_id;
+        opt.textContent = s.name + ' 管理员';
+        document.getElementById('loginStore').appendChild(opt);
+      });
+    });
+
     window.doLogin = function() {
       var pwd = document.getElementById('pwdInput').value.trim();
+      var storeId = document.getElementById('loginStore').value;
       if (!pwd) return;
-      checkPassword(pwd).then(function(ok) {
-        if (ok) {
-          sessionStorage.setItem('admin-logged-in', '1');
-          document.getElementById('loginBox').style.display = 'none';
-          document.getElementById('mainBox').style.display = '';
-          initMain();
-        } else {
-          document.getElementById('loginError').textContent = '密码错误';
-          document.getElementById('loginError').style.display = '';
-        }
-      }).catch(function(err) {
-        document.getElementById('loginError').textContent = '验证失败: ' + (err.message || '网络错误');
-        document.getElementById('loginError').style.display = '';
-      });
+      if (!storeId) {
+        // 超级管理员：用全局密码
+        checkGlobalPwd(pwd).then(function(ok) {
+          if (ok) loginOk('');
+          else showLoginErr('密码错误');
+        }).catch(function(err) { showLoginErr('验证失败: ' + (err.message || '网络错误')); });
+      } else {
+        // 门店管理员：先查门店专属密码，无则用全局密码
+        db.from('store').select('admin_password').eq('store_id', storeId).single()
+          .then(function(r) {
+            var storePwd = r.data && r.data.admin_password;
+            if (storePwd) {
+              if (storePwd === pwd) { loginOk(storeId); }
+              else { showLoginErr('密码错误'); }
+            } else {
+              return checkGlobalPwd(pwd).then(function(ok) {
+                if (ok) loginOk(storeId);
+                else showLoginErr('密码错误');
+              });
+            }
+          }).catch(function(err) { showLoginErr('验证失败: ' + (err.message || '网络错误')); });
+      }
     };
 
-    window.doLogout = function() {
-      sessionStorage.removeItem('admin-logged-in');
-      location.reload();
-    };
+    function showLoginErr(msg) {
+      document.getElementById('loginError').textContent = msg;
+      document.getElementById('loginError').style.display = '';
+    }
 
-    function checkPassword(pwd) {
+    function checkGlobalPwd(pwd) {
       return db.from('app_config').select('*').limit(1).single()
         .then(function(r) {
           if (r.error && r.error.code === 'PGRST116') {
@@ -187,9 +214,31 @@
         });
     }
 
-    if (sessionStorage.getItem('admin-logged-in') === '1') {
+    function loginOk(storeId) {
+      gAdminStoreId = storeId;
+      sessionStorage.setItem('admin-logged-in', '1');
+      sessionStorage.setItem('admin-store', storeId);
       document.getElementById('loginBox').style.display = 'none';
       document.getElementById('mainBox').style.display = '';
+      if (storeId) {
+        document.querySelectorAll('.tab-nav button[data-tab="stores"]').forEach(function(b) { b.style.display = 'none'; });
+      }
+      initMain();
+    }
+
+    window.doLogout = function() {
+      sessionStorage.removeItem('admin-logged-in');
+      sessionStorage.removeItem('admin-store');
+      location.reload();
+    };
+
+    if (sessionStorage.getItem('admin-logged-in') === '1') {
+      gAdminStoreId = sessionStorage.getItem('admin-store') || '';
+      document.getElementById('loginBox').style.display = 'none';
+      document.getElementById('mainBox').style.display = '';
+      if (gAdminStoreId) {
+        document.querySelectorAll('.tab-nav button[data-tab="stores"]').forEach(function(b) { b.style.display = 'none'; });
+      }
       initMain();
     }
 
@@ -214,6 +263,13 @@
           document.getElementById('filterStore').innerHTML = '<option value="">全部门店</option>' + opts;
           document.getElementById('rosterStore').innerHTML = '<option value="">选择门店</option>' + opts;
           document.getElementById('batchStore').innerHTML = '<option value="">选择门店</option>' + opts;
+          // 门店管理员：锁定筛选项
+          if (gAdminStoreId) {
+            document.getElementById('filterStore').value = gAdminStoreId;
+            document.getElementById('filterStore').disabled = true;
+            document.getElementById('rosterStore').value = gAdminStoreId;
+            document.getElementById('batchStore').value = gAdminStoreId;
+          }
           loadRecords();
           loadRosterList();
           loadStoreList();
@@ -337,56 +393,59 @@
         }).catch(function(e) { if (e !== 'dup') alert('添加失败: ' + (e.message || '网络错误')); });
     };
 
-    window.batchImport = function() {
+    window.batchImportExcel = function() {
       var storeId = document.getElementById('batchStore').value;
-      var text = document.getElementById('batchText').value.trim();
+      var fileEl = document.getElementById('excelFile');
       var msgEl = document.getElementById('batchMsg');
       if (!storeId) { msgEl.textContent = '请选择门店'; msgEl.style.color = '#f44336'; return; }
-      if (!text) { msgEl.textContent = '请输入员工数据'; msgEl.style.color = '#f44336'; return; }
-      var lines = text.split(/[\r\n]+/).filter(function(l) { return l.trim(); });
-      var items = [];
-      var errors = [];
-      lines.forEach(function(line, idx) {
-        var parts = line.split(/[,，]/);
-        var name = (parts[0] || '').trim();
-        var phone = (parts[1] || '').trim();
-        if (!name) { errors.push('第' + (idx + 1) + '行缺少姓名'); return; }
-        if (phone && !/^1\d{10}$/.test(phone)) { errors.push('第' + (idx + 1) + '行手机号格式错误: ' + phone); return; }
-        items.push({ store_id: storeId, name: name, phone: phone || null, max_checkins: 3 });
-      });
-      if (errors.length) {
-        msgEl.textContent = errors.join('; '); msgEl.style.color = '#f44336'; return;
-      }
-      if (items.length === 0) { msgEl.textContent = '没有可导入的数据'; msgEl.style.color = '#f44336'; return; }
-      msgEl.textContent = '正在导入 ' + items.length + ' 人...'; msgEl.style.color = '#888';
-      // 先查重
-      db.from('roster').select('name,phone').eq('store_id', storeId).then(function(r) {
-        var existing = r.data || [];
-        var existKeys = {};
-        existing.forEach(function(e) {
-          existKeys[e.name] = (e.phone || '');
-        });
-        var toInsert = [];
-        var skipped = [];
-        items.forEach(function(it) {
-          var ek = existKeys[it.name];
-          if (ek !== undefined) { skipped.push(it.name); return; }
-          toInsert.push(it);
-        });
-        if (skipped.length) { msgEl.textContent = '已跳过重复: ' + skipped.join(', ') + '，其余导入中...'; msgEl.style.color = '#e65100'; }
-        if (toInsert.length === 0) {
-          if (!skipped.length) { msgEl.textContent = '没有需要导入的数据'; msgEl.style.color = '#888'; }
-          return;
+      var file = fileEl.files[0];
+      if (!file) { msgEl.textContent = '请选择 Excel 文件'; msgEl.style.color = '#f44336'; return; }
+      msgEl.textContent = '正在解析...'; msgEl.style.color = '#888';
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          var wb = XLSX.read(e.target.result, { type: 'array' });
+          var sheet = wb.Sheets[wb.SheetNames[0]];
+          var rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+          if (rows.length < 2) { msgEl.textContent = 'Excel 至少需要表头行+1行数据'; msgEl.style.color = '#f44336'; return; }
+          var items = [];
+          var errors = [];
+          for (var r = 1; r < rows.length; r++) {
+            var row = rows[r];
+            var name = (row[0] !== undefined ? String(row[0]).trim() : '');
+            var phone = (row[1] !== undefined ? String(row[1]).trim() : '');
+            if (!name) continue;
+            if (phone && !/^1\d{10}$/.test(phone)) { errors.push('第' + (r + 1) + '行手机号格式错误: ' + phone); continue; }
+            items.push({ store_id: storeId, name: name, phone: phone || null, max_checkins: 3 });
+          }
+          if (errors.length) { msgEl.textContent = errors.join('; '); msgEl.style.color = '#f44336'; return; }
+          if (items.length === 0) { msgEl.textContent = '没有可导入的数据'; msgEl.style.color = '#f44336'; return; }
+          msgEl.textContent = '正在导入 ' + items.length + ' 人...'; msgEl.style.color = '#888';
+          db.from('roster').select('name').eq('store_id', storeId).then(function(r) {
+            var existNames = {};
+            (r.data || []).forEach(function(e) { existNames[e.name] = true; });
+            var toInsert = [];
+            var skipped = [];
+            items.forEach(function(it) {
+              if (existNames[it.name]) { skipped.push(it.name); return; }
+              toInsert.push(it);
+            });
+            if (skipped.length) { msgEl.textContent = '跳过重复: ' + skipped.slice(0, 5).join(', ') + (skipped.length > 5 ? '...等' + skipped.length + '人，' : '，') + '其余导入中...'; msgEl.style.color = '#e65100'; }
+            if (toInsert.length === 0) { if (!skipped.length) msgEl.textContent = '没有可导入的数据'; return; }
+            return db.from('roster').insert(toInsert);
+          }).then(function(res) {
+            if (res && res.error) throw res.error;
+            fileEl.value = '';
+            msgEl.textContent = '成功导入 ' + items.length + ' 人，跳过 ' + skipped.length + ' 人'; msgEl.style.color = '#4caf50';
+            loadRosterList();
+          }).catch(function(err) {
+            msgEl.textContent = '导入失败: ' + (err.message || '网络错误'); msgEl.style.color = '#f44336';
+          });
+        } catch(ex) {
+          msgEl.textContent = '解析 Excel 失败: ' + ex.message; msgEl.style.color = '#f44336';
         }
-        return db.from('roster').insert(toInsert);
-      }).then(function(res) {
-        if (res && res.error) throw res.error;
-        document.getElementById('batchText').value = '';
-        msgEl.textContent = '成功导入 ' + items.length + ' 人' + (errors.length ? '，跳过 ' + errors.length + ' 条' : ''); msgEl.style.color = '#4caf50';
-        loadRosterList();
-      }).catch(function(err) {
-        msgEl.textContent = '导入失败: ' + (err.message || '网络错误'); msgEl.style.color = '#f44336';
-      });
+      };
+      reader.readAsArrayBuffer(file);
     };
 
     function loadRosterList() {
@@ -430,7 +489,8 @@
           return db.from('store').insert({
             store_id: sid, name: sname,
             lat: isNaN(lat) ? null : lat,
-            lng: isNaN(lng) ? null : lng
+            lng: isNaN(lng) ? null : lng,
+            admin_password: document.getElementById('newStorePwd').value.trim() || null
           });
         }).then(function(res) {
           if (res && res.error) throw res.error;
@@ -449,19 +509,27 @@
         return;
       }
       document.getElementById('storeListContainer').innerHTML =
-        '<table class="store-table"><thead><tr><th>门店ID</th><th>名称</th><th>坐标</th><th>今日码</th><th>操作</th></tr></thead><tbody>' +
+        '<table class="store-table"><thead><tr><th>门店ID</th><th>名称</th><th>坐标</th><th>管理员密码</th><th>今日码</th><th>操作</th></tr></thead><tbody>' +
         stores.map(function(s) {
           var coord = (s.lat && s.lng) ? s.lat.toFixed(4) + ', ' + s.lng.toFixed(4) : '未设置';
           return '<tr>' +
             '<td>' + escHtml(s.store_id) + '</td>' +
             '<td>' + escHtml(s.name) + '</td>' +
             '<td>' + coord + '</td>' +
+            '<td><input type="text" id="spwd-' + s.store_id + '" value="' + (s.admin_password || '') + '" placeholder="无" style="width:100px;padding:4px 8px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none">' +
+            ' <button class="btn-success" onclick="saveStorePwd(\'' + s.store_id + '\')">保存</button></td>' +
             '<td>' + (s.daily_code || '--') + '</td>' +
             '<td><button class="del-link" onclick="delStore(\'' + s.store_id + '\')">删除</button></td>' +
             '</tr>';
         }).join('') + '</tbody></table>';
     }
 
+    window.saveStorePwd = function(sid) {
+      var pwd = document.getElementById('spwd-' + sid).value.trim();
+      db.from('store').update({ admin_password: pwd || null }).eq('store_id', sid)
+        .then(function(r) { if (r.error) throw r.error; loadStores(); })
+        .catch(function(e) { alert('保存失败: ' + (e.message || '网络错误')); });
+    };
     window.delStore = function(sid) {
       if (!confirm('删除门店将同时删除该门店的所有数据，确认？')) return;
       Promise.all([
@@ -599,8 +667,11 @@
         db.from('app_config').select('*').limit(1).single()
       ]).then(function(_refA) {
         var stores = (_refA[0].data || []);
+        if (gAdminStoreId) {
+          stores = stores.filter(function(s) { return s.store_id === gAdminStoreId; });
+        }
         var configData = _refA[1].data;
-        window._stores = stores;
+        window._stores = window._stores || stores;
 
         var secret = (configData && configData.daily_secret) || '';
         var cutoffH = (configData && configData.cutoff_hour != null) ? configData.cutoff_hour : 2;

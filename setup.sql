@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS store (
   name TEXT NOT NULL,
   lat FLOAT,
   lng FLOAT,
+  admin_password TEXT,
   daily_code TEXT,
   daily_code_time TIMESTAMPTZ
 );
