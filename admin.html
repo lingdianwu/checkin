@@ -644,19 +644,30 @@
     };
 
     window.setCheckOut = function(id, checkIn) {
-      var defTime = fmtTime(new Date(checkIn));
-      var input = prompt('请输入离岗时间（HH:MM），如 18:30', '18:00');
-      if (!input) return;
-      var parts = input.trim().split(':');
-      var h = parseInt(parts[0], 10), m = parseInt(parts[1], 10);
-      if (isNaN(h) || isNaN(m) || h < 0 || h > 23 || m < 0 || m > 59) { alert('时间格式不正确，请用 HH:MM 格式'); return; }
       var ci = new Date(checkIn);
-      var co = new Date(ci.getFullYear(), ci.getMonth(), ci.getDate(), h, m, 0);
-      if (co <= ci) { alert('离岗时间必须晚于到岗时间'); return; }
+      var defDate = ci.getFullYear() + '-' + ('0'+(ci.getMonth()+1)).slice(-2) + '-' + ('0'+ci.getDate()).slice(-2);
+      var defTime = defDate + ' 18:00';
+      var input = prompt('到岗时间：' + fmtDateTime(ci) + '\n请输入离岗时间（YYYY-MM-DD HH:MM）', defTime);
+      if (!input) return;
+      var parts = input.trim().split(/[\sT]+/);
+      var datePart = parts[0], timePart = parts[1];
+      if (!datePart || !timePart) { alert('格式：YYYY-MM-DD HH:MM，如 ' + defTime); return; }
+      var dateParts = datePart.split('-');
+      var timeParts = timePart.split(':');
+      var y = parseInt(dateParts[0], 10), mo = parseInt(dateParts[1], 10) - 1, d = parseInt(dateParts[2], 10);
+      var h = parseInt(timeParts[0], 10), m = parseInt(timeParts[1], 10);
+      if (isNaN(y) || isNaN(mo) || isNaN(d) || isNaN(h) || isNaN(m)) { alert('格式不正确'); return; }
+      var co = new Date(y, mo, d, h, m, 0);
+      if (isNaN(co.getTime())) { alert('日期无效'); return; }
+      if (co <= ci) { alert('离岗时间（' + fmtDateTime(co) + '）不能早于到岗时间（' + fmtDateTime(ci) + '）'); return; }
       db.from('check_record').update({ check_out: co.toISOString() }).eq('id', id)
         .then(function(r) { if (r.error) throw r.error; loadRecords(); })
         .catch(function(e) { alert('设置失败: ' + (e.message || '网络错误')); });
     };
+    function fmtDateTime(d) {
+      return d.getFullYear() + '-' + ('0'+(d.getMonth()+1)).slice(-2) + '-' + ('0'+d.getDate()).slice(-2) +
+        ' ' + ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2);
+    }
     window.savePhone = function(id) {
       var phone = document.getElementById('phone-' + id).value.trim();
       var mc = parseInt(document.getElementById('mc-' + id).value, 10);
