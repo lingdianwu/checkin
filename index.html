@@ -57,7 +57,19 @@
 
   <div class="footer-info">兼职在岗打卡系统</div>
 
+  <!-- 扫码器浮层 -->
+  <div class="scanner-overlay" id="scannerOverlay" style="display:none">
+    <div class="scanner-box">
+      <div class="scanner-header">
+        <span>对准门店二维码</span>
+        <button class="scanner-close" onclick="stopScan()">✕</button>
+      </div>
+      <div id="qrReader"></div>
+    </div>
+  </div>
+
   <script src="js/supabase.min.js"></script>
+  <script src="js/html5-qrcode.min.js"></script>
   <script src="js/config.js"></script>
   <script>
   (function() {
@@ -161,6 +173,8 @@
       document.getElementById('phoneDisplay').textContent = currentPhone ? maskPhone(currentPhone) : '';
       document.getElementById('statusArea').style.display = '';
       document.getElementById('actionArea').style.display = '';
+      document.getElementById('btnChange').textContent = '切换身份';
+      document.getElementById('btnChange').onclick = clearIdentity;
       loadCheckStatus();
     }
 
@@ -300,6 +314,9 @@
         '<div class="hours-highlight" style="color:#e65100">请重新扫码进行签退</div>';
       document.getElementById('btnCheckin').style.display = 'none';
       document.getElementById('btnCheckout').style.display = 'none';
+      document.getElementById('btnChange').style.display = '';
+      document.getElementById('btnChange').textContent = '扫码签退';
+      document.getElementById('btnChange').onclick = startScan;
     }
 
     function renderCheckOutDone(rec) {
@@ -314,6 +331,9 @@
         '<div style="color:#999;margin-top:10px">请重新扫码进行下次签到</div>';
       document.getElementById('btnCheckin').style.display = 'none';
       document.getElementById('btnCheckout').style.display = 'none';
+      document.getElementById('btnChange').style.display = '';
+      document.getElementById('btnChange').textContent = '扫码签到';
+      document.getElementById('btnChange').onclick = startScan;
     }
 
     // --- 打卡操作 ---
@@ -419,6 +439,41 @@
       ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
       toast('链接已复制，请在浏览器中粘贴打开');
     }
+
+    window.startScan = function() {
+      var overlay = document.getElementById('scannerOverlay');
+      overlay.style.display = '';
+      var reader = document.getElementById('qrReader');
+      reader.innerHTML = '';
+      window._html5QrCode = new Html5Qrcode('qrReader');
+      window._html5QrCode.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        function(decodedText) {
+          // 扫到码后跳转
+          stopScan();
+          if (/index\.html/.test(decodedText)) {
+            window.location.href = decodedText;
+          } else {
+            toast('请扫描门店打卡二维码', 'error');
+          }
+        },
+        function() {} // ignore errors
+      ).catch(function(err) {
+        stopScan();
+        toast('无法打开相机: ' + (err.message || '请检查权限'), 'error');
+      });
+    };
+
+    window.stopScan = function() {
+      document.getElementById('scannerOverlay').style.display = 'none';
+      if (window._html5QrCode) {
+        window._html5QrCode.stop().then(function() {
+          window._html5QrCode.clear();
+        }).catch(function() {});
+        window._html5QrCode = null;
+      }
+    };
 
     function showError(title, detail) {
       hideAll();

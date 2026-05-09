@@ -681,6 +681,42 @@ body {
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* 扫码器浮层 */
+.scanner-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.scanner-box {
+  width: 320px;
+  background: #fff;
+  border-radius: 16px;
+  overflow: hidden;
+}
+.scanner-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #333;
+  border-bottom: 1px solid #eee;
+}
+.scanner-close {
+  width: 28px; height: 28px;
+  font-size: 16px; color: #999;
+  background: none; border: none;
+  cursor: pointer; border-radius: 50%;
+  line-height: 28px; text-align: center;
+}
+.scanner-box #qrReader { width: 320px; height: 320px; }
+.scanner-box #qrReader video { border-radius: 0 0 16px 16px; }
+
 /* 响应式 */
 @media (max-width: 600px) {
   .admin-page { padding: 12px; }
