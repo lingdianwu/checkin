@@ -259,14 +259,27 @@
         '<table class="records-table"><thead><tr><th>姓名</th><th>门店</th><th>日期</th><th>到岗</th><th>离岗</th><th>在岗时长</th><th>操作</th></tr></thead><tbody>' +
         records.map(function(r) {
           var ci = new Date(r.check_in), co = r.check_out ? new Date(r.check_out) : null;
+          var isPastDue = !co && r.date < todayStr;
+          var hourCell;
+          if (co) {
+            hourCell = calcHoursStr(ci, co);
+          } else if (isPastDue) {
+            hourCell = '<span style="color:#ef4440;font-weight:600">未签退</span>';
+          } else {
+            hourCell = '<span style="color:#f59e0b">在岗中</span>';
+          }
+          var actionHtml = '<button class="btn-danger" onclick="deleteRecord(\'' + r.id + '\')">删除</button>';
+          if (isPastDue) {
+            actionHtml += ' <button class="btn-success" onclick="setCheckOut(\'' + r.id + '\',\'' + r.check_in + '\')">编辑离岗</button>';
+          }
           return '<tr>' +
             '<td>' + escHtml(r.name) + '</td>' +
             '<td>' + escHtml(gSN(r.store_id)) + '</td>' +
             '<td>' + r.date + '</td>' +
             '<td>' + fmtTime(ci) + '</td>' +
             '<td>' + fmtTime(co) + '</td>' +
-            '<td class="hours">' + (co ? calcHoursStr(ci, co) : '<span style="color:#e65100">在岗中</span>') + '</td>' +
-            '<td><button class="btn-danger" onclick="deleteRecord(\'' + r.id + '\')">删除</button></td>' +
+            '<td class="hours">' + hourCell + '</td>' +
+            '<td>' + actionHtml + '</td>' +
             '</tr>';
         }).join('') + '</tbody></table>';
     }
@@ -430,6 +443,21 @@
       db.from('check_record').delete().eq('id', id)
         .then(function(r) { if (r.error) throw r.error; loadRecords(); })
         .catch(function(e) { alert('删除失败: ' + (e.message || '网络错误')); });
+    };
+
+    window.setCheckOut = function(id, checkIn) {
+      var defTime = fmtTime(new Date(checkIn));
+      var input = prompt('请输入离岗时间（HH:MM），如 18:30', '18:00');
+      if (!input) return;
+      var parts = input.trim().split(':');
+      var h = parseInt(parts[0], 10), m = parseInt(parts[1], 10);
+      if (isNaN(h) || isNaN(m) || h < 0 || h > 23 || m < 0 || m > 59) { alert('时间格式不正确，请用 HH:MM 格式'); return; }
+      var ci = new Date(checkIn);
+      var co = new Date(ci.getFullYear(), ci.getMonth(), ci.getDate(), h, m, 0);
+      if (co <= ci) { alert('离岗时间必须晚于到岗时间'); return; }
+      db.from('check_record').update({ check_out: co.toISOString() }).eq('id', id)
+        .then(function(r) { if (r.error) throw r.error; loadRecords(); })
+        .catch(function(e) { alert('设置失败: ' + (e.message || '网络错误')); });
     };
     window.savePhone = function(id) {
       var phone = document.getElementById('phone-' + id).value.trim();
