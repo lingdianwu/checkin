@@ -54,6 +54,7 @@
         <span style="color:#888">至</span>
         <input type="date" id="filterDateTo">
         <button onclick="loadRecords()">查询</button>
+        <button class="btn-outline" onclick="exportCSV()">导出 CSV</button>
       </div>
       <div id="recordsContainer"><div class="loading">加载中</div></div>
     </div>
@@ -235,6 +236,38 @@
       }).catch(function(err) {
         document.getElementById('recordsContainer').innerHTML =
           '<div class="empty-state">加载失败: ' + (err.message || '网络错误') + '</div>';
+      });
+    };
+
+    window.exportCSV = function() {
+      var filterStore = document.getElementById('filterStore').value;
+      var dateFrom = document.getElementById('filterDateFrom').value;
+      var dateTo = document.getElementById('filterDateTo').value;
+      var query = db.from('check_record').select('*').order('check_in', { ascending: false }).limit(5000);
+      if (filterStore) query = query.eq('store_id', filterStore);
+      if (dateFrom) query = query.gte('date', dateFrom);
+      if (dateTo) query = query.lte('date', dateTo);
+      query.then(function(r) {
+        if (r.error) throw r.error;
+        var records = r.data || [];
+        if (records.length === 0) { alert('没有可导出的记录'); return; }
+        var header = '姓名,门店,日期,到岗时间,离岗时间,在岗时长';
+        var rows = records.map(function(rec) {
+          var ci = new Date(rec.check_in), co = rec.check_out ? new Date(rec.check_out) : null;
+          return [
+            rec.name, gSN(rec.store_id), rec.date,
+            fmtTime(ci), fmtTime(co),
+            co ? calcHoursStr(ci, co) : '未签退'
+          ].map(function(v) { return '"' + (v || '').replace(/"/g, '""') + '"'; }).join(',');
+        });
+        var csv = '﻿' + header + '\n' + rows.join('\n');
+        var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url; a.download = '考勤记录_' + (dateFrom || '全部') + '_' + (dateTo || '全部') + '.csv';
+        a.click(); URL.revokeObjectURL(url);
+      }).catch(function(err) {
+        alert('导出失败: ' + (err.message || '网络错误'));
       });
     };
 
