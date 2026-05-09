@@ -23,6 +23,16 @@
 </head>
 <body class="locate-page">
 
+  <!-- 微信浏览器引导条 -->
+  <div class="wechat-tip" id="wechatTip" style="display:none">
+    <div class="wechat-tip-icon">⚠️</div>
+    <div class="wechat-tip-body">
+      <div class="wechat-tip-title">请在浏览器中打开</div>
+      <div class="wechat-tip-desc">点击右上角 <b>「···」</b> → 选择 <b>「在浏览器中打开」</b></div>
+    </div>
+    <button class="wechat-tip-close" onclick="document.getElementById('wechatTip').style.display='none'">✕</button>
+  </div>
+
   <h1>门店定位采集</h1>
   <p class="sub">用手机在门店门口打开此页面</p>
 
@@ -62,6 +72,11 @@
   (function() {
     var currentLat = null;
     var currentLng = null;
+
+    // 检测微信内置浏览器
+    if (/micromessenger/i.test(navigator.userAgent)) {
+      document.getElementById('wechatTip').style.display = '';
+    }
 
     // 加载门店列表
     db.from('store').select('store_id,name').order('store_id').then(function(r) {

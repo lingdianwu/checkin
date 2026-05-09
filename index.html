@@ -8,6 +8,16 @@
 </head>
 <body class="checkin-page">
 
+  <!-- 微信浏览器引导条 -->
+  <div class="wechat-tip" id="wechatTip" style="display:none">
+    <div class="wechat-tip-icon">⚠️</div>
+    <div class="wechat-tip-body">
+      <div class="wechat-tip-title">请在浏览器中打开</div>
+      <div class="wechat-tip-desc">点击右上角 <b>「···」</b> → 选择 <b>「在浏览器中打开」</b></div>
+    </div>
+    <button class="wechat-tip-close" onclick="document.getElementById('wechatTip').style.display='none'">✕</button>
+  </div>
+
   <div class="store-header">
     <div class="icon">📍</div>
     <h1 id="storeName">加载中...</h1>
@@ -72,6 +82,10 @@
     init();
 
     function init() {
+      // 检测微信内置浏览器，显示引导提示
+      if (/micromessenger/i.test(navigator.userAgent)) {
+        document.getElementById('wechatTip').style.display = '';
+      }
       Promise.all([loadStore(), loadAppConfig()]).then(function() {
         // 验证动态码（自动每日变化）
         if (dailySecret && urlCode) {
@@ -320,9 +334,6 @@
       showPhoneInput();
     };
 
-    // --- GPS距离计算 (Haversine) ---
-    function haversine(lat1, lng1, lat2, lng2) {
-
     // --- 每日码计算 ---
     function computeDailyCode(secret, sid) {
       var today = dateStr(new Date());
@@ -335,6 +346,7 @@
     }
 
     // --- GPS距离计算 (Haversine) ---
+    function haversine(lat1, lng1, lat2, lng2) {
       var R = 6371000; // 地球半径（米）
       var dLat = (lat2 - lat1) * Math.PI / 180;
       var dLng = (lng2 - lng1) * Math.PI / 180;

@@ -35,7 +35,8 @@ CREATE TABLE IF NOT EXISTS check_record (
 -- 4. 应用配置表
 CREATE TABLE IF NOT EXISTS app_config (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  admin_password TEXT NOT NULL
+  admin_password TEXT NOT NULL,
+  daily_secret TEXT
 );
 
 -- ============================================
