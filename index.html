@@ -139,6 +139,8 @@
           document.getElementById('storeTag').textContent = storeId;
           storeLat = _ref.data.lat || null;
           storeLng = _ref.data.lng || null;
+          if (_ref.data.cutoff_hour != null) cutoffHour = _ref.data.cutoff_hour;
+          if (_ref.data.cutoff_minute != null) cutoffMinute = _ref.data.cutoff_minute;
         });
     }
 

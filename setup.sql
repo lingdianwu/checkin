@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS store (
   name TEXT NOT NULL,
   lat FLOAT,
   lng FLOAT,
+  cutoff_hour INTEGER DEFAULT 2,
+  cutoff_minute INTEGER DEFAULT 0,
   daily_code TEXT,
   daily_code_time TIMESTAMPTZ
 );

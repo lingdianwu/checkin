@@ -97,6 +97,14 @@
           <input type="text" id="newStoreName" placeholder="门店名称">
           <input type="text" id="newStoreLat" placeholder="纬度（如 39.9042）" style="width:150px">
           <input type="text" id="newStoreLng" placeholder="经度（如 116.4074）" style="width:150px">
+          <select id="newStoreCutoffH" style="width:70px;padding:10px 8px;font-size:14px;border:1.5px solid #e2e8f0;border-radius:8px;outline:none;background:#fff">
+            <option value="0">00</option><option value="1">01</option><option value="2" selected>02</option><option value="3">03</option><option value="4">04</option><option value="5">05</option><option value="6">06</option><option value="7">07</option><option value="8">08</option>
+          </select>
+          <span style="font-size:14px;color:#666">:</span>
+          <select id="newStoreCutoffM" style="width:70px;padding:10px 8px;font-size:14px;border:1.5px solid #e2e8f0;border-radius:8px;outline:none;background:#fff">
+            <option value="0" selected>00</option><option value="30">30</option>
+          </select>
+          <span style="font-size:12px;color:#999">截止时间</span>
           <button class="btn-primary" onclick="addStore()">添加门店</button>
         </div>
         <p style="font-size:12px;color:#999;margin:-8px 0 12px">
@@ -499,7 +507,9 @@
           return db.from('store').insert({
             store_id: sid, name: sname,
             lat: isNaN(lat) ? null : lat,
-            lng: isNaN(lng) ? null : lng
+            lng: isNaN(lng) ? null : lng,
+            cutoff_hour: parseInt(document.getElementById('newStoreCutoffH').value),
+            cutoff_minute: parseInt(document.getElementById('newStoreCutoffM').value)
           });
         }).then(function(res) {
           if (res && res.error) throw res.error;
@@ -518,13 +528,22 @@
         return;
       }
       document.getElementById('storeListContainer').innerHTML =
-        '<table class="store-table"><thead><tr><th>门店ID</th><th>名称</th><th>坐标</th><th>今日码</th><th>操作</th></tr></thead><tbody>' +
+        '<table class="store-table"><thead><tr><th>门店ID</th><th>名称</th><th>坐标</th><th>打卡截止</th><th>今日码</th><th>操作</th></tr></thead><tbody>' +
         stores.map(function(s) {
           var coord = (s.lat && s.lng) ? s.lat.toFixed(4) + ', ' + s.lng.toFixed(4) : '未设置';
+          var ch = s.cutoff_hour != null ? ('0'+s.cutoff_hour).slice(-2) : '02';
+          var cm = s.cutoff_minute != null ? ('0'+s.cutoff_minute).slice(-2) : '00';
           return '<tr>' +
             '<td>' + escHtml(s.store_id) + '</td>' +
             '<td>' + escHtml(s.name) + '</td>' +
             '<td>' + coord + '</td>' +
+            '<td>' +
+            '<select id="sch-' + s.store_id + '" onchange="saveStoreCutoff(\'' + s.store_id + '\')" style="padding:4px 6px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none;background:#fff">' +
+            [0,1,2,3,4,5,6,7,8].map(function(h) { return '<option value="' + h + '"' + (h === (s.cutoff_hour||2) ? ' selected' : '') + '>' + ('0'+h).slice(-2) + '</option>'; }).join('') +
+            '</select> : ' +
+            '<select id="scm-' + s.store_id + '" onchange="saveStoreCutoff(\'' + s.store_id + '\')" style="padding:4px 6px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none;background:#fff">' +
+            ['00','30'].map(function(m) { return '<option value="' + m + '"' + (parseInt(m) === (s.cutoff_minute||0) ? ' selected' : '') + '>' + m + '</option>'; }).join('') +
+            '</select></td>' +
             '<td>' + (s.daily_code || '--') + '</td>' +
             '<td><button class="del-link" onclick="delStore(\'' + s.store_id + '\')">删除</button></td>' +
             '</tr>';
@@ -578,6 +597,13 @@
             }).join('') + '</tbody></table>';
         });
     }
+    window.saveStoreCutoff = function(sid) {
+      var h = parseInt(document.getElementById('sch-' + sid).value);
+      var m = parseInt(document.getElementById('scm-' + sid).value);
+      db.from('store').update({ cutoff_hour: h, cutoff_minute: m }).eq('store_id', sid)
+        .then(function(r) { if (r.error) throw r.error; })
+        .catch(function(e) { alert('保存失败: ' + (e.message || '网络错误')); });
+    };
     window.delStore = function(sid) {
       if (!confirm('删除门店将同时删除该门店的所有数据，确认？')) return;
       Promise.all([
