@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>门店定位采集</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .locate-page { max-width: 480px; margin: 0 auto; padding: 30px 20px; text-align: center; }
+    .locate-page h1 { font-size: 22px; margin-bottom: 8px; }
+    .locate-page .sub { color: #888; font-size: 14px; margin-bottom: 30px; }
+    .locate-card { background: #fff; border-radius: 16px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 20px; }
+    .locate-card .coord { font-size: 32px; font-weight: 700; color: #4a90d9; margin: 12px 0; word-break: break-all; }
+    .locate-card .acc { font-size: 13px; color: #999; }
+    .locate-card select { width: 100%; padding: 12px; font-size: 16px; border: 1px solid #d0d7e2; border-radius: 10px; margin: 12px 0; outline: none; }
+    .locate-card button { width: 100%; padding: 16px; font-size: 18px; font-weight: 600; background: #4a90d9; color: #fff; border: none; border-radius: 12px; cursor: pointer; }
+    .locate-card button:disabled { background: #bbb; cursor: not-allowed; }
+    .locate-card .done { font-size: 40px; margin: 20px 0; }
+  </style>
+</head>
+<body class="locate-page">
+
+  <h1>门店定位采集</h1>
+  <p class="sub">请在门店门口打开此页面，允许定位权限</p>
+
+  <div class="locate-card" id="step1">
+    <p style="color:#888;margin-bottom:8px">当前坐标</p>
+    <div class="coord" id="coordText">获取中...</div>
+    <div class="acc" id="accText"></div>
+    <button id="retryBtn" onclick="getLocation()" style="margin-top:8px;background:#eee;color:#333">重新获取</button>
+  </div>
+
+  <div class="locate-card" id="step2" style="display:none">
+    <p style="color:#888">选择你所在的门店</p>
+    <select id="storeSelect"><option value="">请选择门店</option></select>
+    <p id="submitMsg" style="font-size:13px;margin-top:8px"></p>
+    <button id="submitBtn" onclick="submitLocation()">确认提交</button>
+  </div>
+
+  <div class="locate-card" id="step3" style="display:none">
+    <div class="done">✅</div>
+    <p style="font-size:18px;font-weight:600;color:#4caf50">提交成功！</p>
+    <p style="color:#888;margin-top:8px">管理员已收到此门店坐标</p>
+    <button onclick="resetForm()" style="margin-top:16px;background:#eee;color:#333">提交另一个门店</button>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/dist/umd/supabase.min.js"></script>
+  <script src="js/config.js"></script>
+  <script>
+  (function() {
+    var currentLat = null;
+    var currentLng = null;
+    var currentAcc = null;
+
+    // 加载门店列表
+    db.from('store').select('store_id,name').order('store_id').then(function(r) {
+      if (r.error) return;
+      var stores = r.data || [];
+      document.getElementById('storeSelect').innerHTML =
+        '<option value="">请选择门店</option>' +
+        stores.map(function(s) {
+          return '<option value="' + s.store_id + '">' + s.name + '</option>';
+        }).join('');
+    });
+
+    // 获取位置
+    getLocation();
+
+    window.getLocation = function() {
+      document.getElementById('coordText').textContent = '获取中...';
+      document.getElementById('accText').textContent = '';
+      document.getElementById('retryBtn').style.display = 'none';
+      document.getElementById('step2').style.display = 'none';
+      document.getElementById('submitBtn').disabled = false;
+
+      if (!navigator.geolocation) {
+        document.getElementById('coordText').textContent = '不支持定位';
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(function(pos) {
+        currentLat = pos.coords.latitude;
+        currentLng = pos.coords.longitude;
+        currentAcc = pos.coords.accuracy;
+        document.getElementById('coordText').textContent = currentLat.toFixed(6) + ', ' + currentLng.toFixed(6);
+        document.getElementById('accText').textContent = '精度: ±' + Math.round(currentAcc) + '米';
+        document.getElementById('retryBtn').style.display = '';
+        document.getElementById('step2').style.display = '';
+      }, function(err) {
+        var msgs = { 1: '定位被拒绝，请允许定位权限', 2: '无法获取位置，请检查GPS', 3: '定位超时' };
+        document.getElementById('coordText').textContent = msgs[err.code] || '定位失败';
+        document.getElementById('retryBtn').style.display = '';
+      }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+    };
+
+    window.submitLocation = function() {
+      var storeId = document.getElementById('storeSelect').value;
+      if (!storeId) { document.getElementById('submitMsg').textContent = '请选择门店'; document.getElementById('submitMsg').style.color = '#f44336'; return; }
+      if (!currentLat) { document.getElementById('submitMsg').textContent = '请先获取定位'; document.getElementById('submitMsg').style.color = '#f44336'; return; }
+
+      document.getElementById('submitBtn').disabled = true;
+      document.getElementById('submitMsg').textContent = '提交中...';
+      document.getElementById('submitMsg').style.color = '#888';
+
+      db.from('store').update({ lat: currentLat, lng: currentLng }).eq('store_id', storeId)
+        .then(function(r) {
+          if (r.error) throw r.error;
+          document.getElementById('step1').style.display = 'none';
+          document.getElementById('step2').style.display = 'none';
+          document.getElementById('step3').style.display = '';
+        }).catch(function(e) {
+          document.getElementById('submitBtn').disabled = false;
+          document.getElementById('submitMsg').textContent = '提交失败: ' + (e.message || '网络错误');
+          document.getElementById('submitMsg').style.color = '#f44336';
+        });
+    };
+
+    window.resetForm = function() {
+      currentLat = currentLng = null;
+      document.getElementById('step1').style.display = '';
+      document.getElementById('step2').style.display = 'none';
+      document.getElementById('step3').style.display = 'none';
+      document.getElementById('storeSelect').value = '';
+      getLocation();
+    };
+  })();
+  </script>
+</body>
+</html>
