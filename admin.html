@@ -375,10 +375,23 @@
           var hourCell;
           if (co) {
             hourCell = calcHoursStr(ci, co);
-          } else if (needsCheckout && r.date < todayStr) {
-            hourCell = '<span style="color:#ef4440;font-weight:600">未签退</span>';
           } else {
-            hourCell = '<span style="color:#f59e0b">在岗中</span>';
+            var pastDue = false;
+            var yesterdayStr = dateStr(new Date(Date.now() - 86400000));
+            if (r.date < yesterdayStr) {
+              pastDue = true;
+            } else if (r.date === yesterdayStr) {
+              var store = (window._stores || []).filter(function(s) { return s.store_id === r.store_id; })[0];
+              var ch = (store && store.cutoff_hour != null) ? store.cutoff_hour : 2;
+              var cm = (store && store.cutoff_minute != null) ? store.cutoff_minute : 0;
+              var now = new Date();
+              if (now.getHours() > ch || (now.getHours() === ch && now.getMinutes() >= cm)) {
+                pastDue = true;
+              }
+            }
+            hourCell = pastDue
+              ? '<span style="color:#ef4440;font-weight:600">未签退</span>'
+              : '<span style="color:#f59e0b">在岗中</span>';
           }
           var actionHtml = '<button class="btn-danger" onclick="deleteRecord(\'' + r.id + '\')">删除</button>';
           if (needsCheckout) {
