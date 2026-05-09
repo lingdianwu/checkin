@@ -11,7 +11,8 @@
   <!-- 登录界面 -->
   <div class="admin-login" id="loginBox">
     <h1>管理后台</h1>
-    <input type="tel" id="loginPhone" placeholder="手机号" style="margin-bottom:10px" onkeydown="if(event.key==='Enter')document.getElementById('pwdInput').focus()">
+    <input type="tel" id="loginPhone" placeholder="手机号（管理员）" style="margin-bottom:10px" onkeydown="if(event.key==='Enter')document.getElementById('pwdInput').focus()">
+    <p style="font-size:12px;color:#999;margin:-6px 0 12px">超级管理员留空，直接输入密码</p>
     <input type="password" id="pwdInput" placeholder="密码" onkeydown="if(event.key==='Enter')doLogin()">
     <button onclick="doLogin()">登 录</button>
     <p id="loginError" style="color:#f44336;margin-top:12px;font-size:14px;display:none"></p>
@@ -171,16 +172,20 @@
     window.doLogin = function() {
       var phone = document.getElementById('loginPhone').value.trim();
       var pwd = document.getElementById('pwdInput').value.trim();
-      if (!phone || !pwd) return;
+      if (!pwd) return;
 
-      // 先检查全局密码（超级管理员）
+      // 没填手机号 → 超级管理员登录
+      if (!phone) {
+        checkGlobalPwd(pwd).then(function(ok) {
+          if (ok) { gAdminStoreId = ''; gAdminName = '超级管理员'; gIsSuper = true; loginOk(); }
+          else showLoginErr('密码错误');
+        }).catch(function(err) { showLoginErr('验证失败: ' + (err.message || '网络错误')); });
+        return;
+      }
+
+      // 填了手机号 → 先查全局密码，再查门店管理员
       checkGlobalPwd(pwd).then(function(ok) {
-        if (ok) {
-          gAdminStoreId = ''; gAdminName = '超级管理员'; gIsSuper = true;
-          loginOk();
-          return Promise.reject('done');
-        }
-        // 查 admin_user 表
+        if (ok) { gAdminStoreId = ''; gAdminName = '超级管理员'; gIsSuper = true; loginOk(); return Promise.reject('done'); }
         return db.from('admin_user').select('*').eq('phone', phone).single();
       }).then(function(r) {
         if (r === 'done') return;
