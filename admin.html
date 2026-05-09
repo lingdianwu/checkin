@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理后台 - 兼职打卡</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="admin-page">
+
+  <!-- 登录界面 -->
+  <div class="admin-login" id="loginBox">
+    <h1>🔐 管理后台</h1>
+    <input type="password" id="pwdInput" placeholder="请输入管理密码" onkeydown="if(event.key==='Enter')doLogin()">
+    <button onclick="doLogin()">登 录</button>
+    <p id="loginError" style="color:#f44336;margin-top:12px;font-size:14px;display:none"></p>
+  </div>
+
+  <!-- 主界面 -->
+  <div id="mainBox" style="display:none">
+
+    <div class="admin-header">
+      <h1>📋 兼职打卡管理</h1>
+      <div>
+        <button class="logout-btn" onclick="showChangePwd()" style="margin-right:8px">修改密码</button>
+        <button class="logout-btn" onclick="doLogout()">退出登录</button>
+      </div>
+    </div>
+
+    <!-- 修改密码弹窗 -->
+    <div id="changePwdBox" style="display:none;background:#fff;border-radius:12px;padding:24px;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,0.08)">
+      <h3 style="margin-bottom:16px">修改管理密码</h3>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <input type="password" id="oldPwd" placeholder="原密码" style="padding:10px;border:1px solid #d0d7e2;border-radius:8px;font-size:14px">
+        <input type="password" id="newPwd" placeholder="新密码" style="padding:10px;border:1px solid #d0d7e2;border-radius:8px;font-size:14px">
+        <button onclick="doChangePwd()" style="padding:10px 20px;background:#4a90d9;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px">确认修改</button>
+        <button onclick="document.getElementById('changePwdBox').style.display='none'" style="padding:10px 20px;background:#eee;border:none;border-radius:8px;cursor:pointer;font-size:14px">取消</button>
+      </div>
+      <p id="changePwdMsg" style="margin-top:10px;font-size:13px"></p>
+    </div>
+
+    <div class="tab-nav">
+      <button class="active" data-tab="records" onclick="switchTab('records')">考勤记录</button>
+      <button data-tab="roster" onclick="switchTab('roster')">花名册管理</button>
+      <button data-tab="qrcode" onclick="switchTab('qrcode')">门店二维码</button>
+    </div>
+
+    <!-- 考勤记录 -->
+    <div class="tab-content" id="tab-records">
+
+      <div class="summary-cards" id="summaryCards"></div>
+
+      <div class="filter-bar">
+        <select id="filterStore">
+          <option value="">全部门店</option>
+        </select>
+        <input type="date" id="filterDateFrom">
+        <span style="color:#888">至</span>
+        <input type="date" id="filterDateTo">
+        <button onclick="loadRecords()">查询</button>
+      </div>
+
+      <div id="recordsContainer">
+        <div class="loading">加载中</div>
+      </div>
+    </div>
+
+    <!-- 花名册管理 -->
+    <div class="tab-content" id="tab-roster" style="display:none">
+      <div class="roster-section">
+        <h3>添加员工</h3>
+        <div class="roster-add">
+          <select id="rosterStore">
+            <option value="">选择门店</option>
+          </select>
+          <input type="text" id="rosterName" placeholder="员工姓名">
+          <button onclick="addRoster()">添加</button>
+        </div>
+      </div>
+      <div class="roster-section">
+        <h3>员工列表</h3>
+        <div id="rosterListContainer">
+          <div class="loading">加载中</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 二维码 -->
+    <div class="tab-content" id="tab-qrcode" style="display:none">
+      <p style="margin-bottom:16px;color:#666;font-size:14px">
+        打印以下二维码贴在各门店入口，员工扫码即可打卡。<br>
+        打卡链接：<code id="baseUrlDisplay" style="background:#f0f0f0;padding:2px 6px;border-radius:4px"></code>
+      </p>
+      <div class="qr-section" id="qrContainer">
+        <div class="loading">加载中</div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/dist/umd/supabase.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <script src="js/config.js"></script>
+  <script>
+  (function() {
+    var loggedIn = false;
+
+    // ====== 登录 ======
+    window.doLogin = function() {
+      var pwd = document.getElementById('pwdInput').value.trim();
+      if (!pwd) return;
+      checkPassword(pwd).then(function(ok) {
+        if (ok) {
+          loggedIn = true;
+          sessionStorage.setItem('admin-logged-in', '1');
+          document.getElementById('loginBox').style.display = 'none';
+          document.getElementById('mainBox').style.display = '';
+          initMain();
+        } else {
+          document.getElementById('loginError').textContent = '密码错误';
+          document.getElementById('loginError').style.display = '';
+        }
+      }).catch(function(err) {
+        document.getElementById('loginError').textContent = '验证失败: ' + (err.message || '网络错误');
+        document.getElementById('loginError').style.display = '';
+      });
+    };
+
+    window.doLogout = function() {
+      sessionStorage.removeItem('admin-logged-in');
+      location.reload();
+    };
+
+    function checkPassword(pwd) {
+      return db.from('app_config').select('*').limit(1).single()
+        .then(function(_ref) {
+          var data = _ref.data, error = _ref.error;
+          if (error && error.code === 'PGRST116') {
+            // 首次使用：自动创建默认密码
+            return db.from('app_config').insert({ admin_password: 'admin123' }).select().single()
+              .then(function(_ref2) {
+                var cfg = _ref2.data;
+                return cfg && cfg.admin_password === pwd;
+              });
+          }
+          if (error) throw error;
+          return data && data.admin_password === pwd;
+        });
+    }
+
+    // 检查是否已登录
+    if (sessionStorage.getItem('admin-logged-in') === '1') {
+      loggedIn = true;
+      document.getElementById('loginBox').style.display = 'none';
+      document.getElementById('mainBox').style.display = '';
+      initMain();
+    }
+
+    // ====== 主界面 ======
+    function initMain() {
+      var today = dateStr(new Date());
+      document.getElementById('filterDateFrom').value = today;
+      document.getElementById('filterDateTo').value = today;
+
+      var base = location.origin + location.pathname.replace(/admin\.html$/, 'index.html');
+      document.getElementById('baseUrlDisplay').textContent = base + '?store=门店ID';
+
+      loadStores().then(function() {
+        loadRecords();
+        loadRosterList();
+      });
+    }
+
+    // ====== 门店 ======
+    function loadStores() {
+      return db.from('store').select('*').order('store_id')
+        .then(function(_ref3) {
+          var data = _ref3.data, error = _ref3.error;
+          if (error) throw error;
+          var stores = data || [];
+          var opts = stores.map(function(s) {
+            return '<option value="' + s.store_id + '">' + s.name + '</option>';
+          }).join('');
+          document.getElementById('filterStore').innerHTML = '<option value="">全部门店</option>' + opts;
+          document.getElementById('rosterStore').innerHTML = '<option value="">选择门店</option>' + opts;
+          window._stores = stores;
+          return stores;
+        });
+    }
+
+    // ====== 考勤记录 ======
+    window.loadRecords = function() {
+      document.getElementById('recordsContainer').innerHTML = '<div class="loading">加载中</div>';
+
+      var filterStore = document.getElementById('filterStore').value;
+      var dateFrom = document.getElementById('filterDateFrom').value;
+      var dateTo = document.getElementById('filterDateTo').value;
+
+      var query = db.from('check_record').select('*').order('check_in', { ascending: false }).limit(500);
+      if (filterStore) query = query.eq('store_id', filterStore);
+      if (dateFrom) query = query.gte('date', dateFrom);
+      if (dateTo) query = query.lte('date', dateTo);
+
+      query.then(function(_ref4) {
+        var data = _ref4.data, error = _ref4.error;
+        if (error) throw error;
+        renderRecords(data || []);
+      }).catch(function(err) {
+        document.getElementById('recordsContainer').innerHTML =
+          '<div class="empty-state">加载失败: ' + (err.message || '网络错误') + '</div>';
+      });
+    };
+
+    function renderRecords(records) {
+      if (records.length === 0) {
+        document.getElementById('recordsContainer').innerHTML = '<div class="empty-state">暂无打卡记录</div>';
+        document.getElementById('summaryCards').innerHTML = '';
+        return;
+      }
+
+      var todayStr = dateStr(new Date());
+      var todayCount = 0;
+      var todayTotalMin = 0;
+      records.forEach(function(r) {
+        if (r.date === todayStr) todayCount++;
+        if (r.date === todayStr && r.check_out) {
+          todayTotalMin += (new Date(r.check_out).getTime() - new Date(r.check_in).getTime()) / 60000;
+        }
+      });
+
+      document.getElementById('summaryCards').innerHTML =
+        '<div class="summary-card"><div class="num">' + records.length + '</div><div class="label">筛选记录数</div></div>' +
+        '<div class="summary-card"><div class="num">' + todayCount + '</div><div class="label">今日打卡人次</div></div>' +
+        '<div class="summary-card"><div class="num">' + fmtHoursMin(todayTotalMin) + '</div><div class="label">今日在岗总时长</div></div>';
+
+      var rows = records.map(function(r) {
+        var ci = new Date(r.check_in);
+        var co = r.check_out ? new Date(r.check_out) : null;
+        var hours = co ? calcHoursStr(ci, co) : '<span style="color:#e65100">在岗中</span>';
+        return '<tr>' +
+          '<td>' + escHtml(r.name) + '</td>' +
+          '<td>' + escHtml(getStoreName(r.store_id)) + '</td>' +
+          '<td>' + r.date + '</td>' +
+          '<td>' + fmtTime(ci) + '</td>' +
+          '<td>' + fmtTime(co) + '</td>' +
+          '<td class="hours">' + hours + '</td>' +
+          '<td><button onclick="deleteRecord(\'' + r.id + '\')" style="padding:4px 10px;font-size:12px;background:#fce4ec;color:#c62828;border:none;border-radius:4px;cursor:pointer">删除</button></td>' +
+          '</tr>';
+      }).join('');
+
+      document.getElementById('recordsContainer').innerHTML =
+        '<table class="records-table">' +
+        '<thead><tr><th>姓名</th><th>门店</th><th>日期</th><th>到岗</th><th>离岗</th><th>在岗时长</th><th>操作</th></tr></thead>' +
+        '<tbody>' + rows + '</tbody></table>';
+    }
+
+    function getStoreName(sid) {
+      var stores = window._stores || [];
+      var s = stores.filter(function(s) { return s.store_id === sid; })[0];
+      return s ? s.name : sid;
+    }
+
+    // ====== 花名册管理 ======
+    window.addRoster = function() {
+      var storeId = document.getElementById('rosterStore').value;
+      var name = document.getElementById('rosterName').value.trim();
+      if (!storeId) { alert('请选择门店'); return; }
+      if (!name) { alert('请输入姓名'); return; }
+
+      db.from('roster').select('*').eq('store_id', storeId).eq('name', name).single()
+        .then(function(_ref5) {
+          var data = _ref5.data;
+          if (data) { alert('该员工已存在'); return Promise.reject('duplicate'); }
+          return db.from('roster').insert({ store_id: storeId, name: name });
+        }).then(function(result) {
+          if (result && result.error) throw result.error;
+          document.getElementById('rosterName').value = '';
+          loadRosterList();
+        }).catch(function(err) {
+          if (err !== 'duplicate') alert('添加失败: ' + (err.message || '网络错误'));
+        });
+    };
+
+    function loadRosterList() {
+      document.getElementById('rosterListContainer').innerHTML = '<div class="loading">加载中</div>';
+      db.from('roster').select('*').order('store_id').order('name')
+        .then(function(_ref6) {
+          var data = _ref6.data, error = _ref6.error;
+          if (error) throw error;
+          var list = data || [];
+          if (list.length === 0) {
+            document.getElementById('rosterListContainer').innerHTML =
+              '<div class="empty-state">暂无员工，请先添加</div>';
+            return;
+          }
+          var html = list.map(function(r) {
+            return '<div class="roster-item">' +
+              '<span>' + escHtml(r.name) + '</span>' +
+              '<span style="color:#999;font-size:12px">(' + getStoreName(r.store_id) + ')</span>' +
+              '<button class="del-btn" onclick="delRoster(\'' + r.id + '\')">&times;</button>' +
+              '</div>';
+          }).join('');
+          document.getElementById('rosterListContainer').innerHTML =
+            '<div class="roster-list">' + html + '</div>';
+        });
+    }
+
+    // ====== 删除 ======
+    window.deleteRecord = function(id) {
+      if (!confirm('确认删除这条打卡记录？此操作不可恢复。')) return;
+      db.from('check_record').delete().eq('id', id)
+        .then(function(_ref7) {
+          var error = _ref7.error;
+          if (error) throw error;
+          loadRecords();
+        }).catch(function(err) {
+          alert('删除失败: ' + (err.message || '网络错误'));
+        });
+    };
+
+    window.delRoster = function(id) {
+      if (!confirm('确认删除该员工？')) return;
+      db.from('roster').delete().eq('id', id)
+        .then(function(_ref8) {
+          var error = _ref8.error;
+          if (error) throw error;
+          loadRosterList();
+        }).catch(function(err) {
+          alert('删除失败: ' + (err.message || '网络错误'));
+        });
+    };
+
+    // ====== 修改密码 ======
+    window.showChangePwd = function() {
+      document.getElementById('changePwdBox').style.display = '';
+      document.getElementById('oldPwd').value = '';
+      document.getElementById('newPwd').value = '';
+      document.getElementById('changePwdMsg').textContent = '';
+    };
+
+    window.doChangePwd = function() {
+      var oldPwd = document.getElementById('oldPwd').value.trim();
+      var newPwd = document.getElementById('newPwd').value.trim();
+      if (!oldPwd || !newPwd) {
+        document.getElementById('changePwdMsg').textContent = '请填写原密码和新密码';
+        document.getElementById('changePwdMsg').style.color = '#f44336';
+        return;
+      }
+      if (newPwd.length < 4) {
+        document.getElementById('changePwdMsg').textContent = '新密码至少4位';
+        document.getElementById('changePwdMsg').style.color = '#f44336';
+        return;
+      }
+      db.from('app_config').select('*').limit(1).single()
+        .then(function(_ref9) {
+          var data = _ref9.data, error = _ref9.error;
+          if (error || !data) {
+            document.getElementById('changePwdMsg').textContent = '配置不存在，请刷新重试';
+            document.getElementById('changePwdMsg').style.color = '#f44336';
+            return Promise.reject('noconfig');
+          }
+          if (data.admin_password !== oldPwd) {
+            document.getElementById('changePwdMsg').textContent = '原密码错误';
+            document.getElementById('changePwdMsg').style.color = '#f44336';
+            return Promise.reject('wrongpwd');
+          }
+          return db.from('app_config').update({ admin_password: newPwd }).eq('id', data.id);
+        }).then(function(result) {
+          if (!result || result.error) throw result.error;
+          document.getElementById('changePwdMsg').textContent = '密码修改成功！';
+          document.getElementById('changePwdMsg').style.color = '#4caf50';
+          setTimeout(function() {
+            document.getElementById('changePwdBox').style.display = 'none';
+          }, 1500);
+        }).catch(function(err) {
+          if (err === 'noconfig' || err === 'wrongpwd') return;
+          document.getElementById('changePwdMsg').textContent = '修改失败: ' + (err.message || '网络错误');
+          document.getElementById('changePwdMsg').style.color = '#f44336';
+        });
+    };
+
+    // ====== 二维码 ======
+    function loadQRCodes() {
+      document.getElementById('qrContainer').innerHTML = '<div class="loading">加载中</div>';
+      var baseUrl = location.origin + location.pathname.replace(/admin\.html$/, 'index.html');
+      document.getElementById('baseUrlDisplay').textContent = baseUrl + '?store=门店ID';
+
+      var stores = window._stores || [];
+      if (stores.length === 0) {
+        document.getElementById('qrContainer').innerHTML =
+          '<div class="empty-state">暂未配置门店，请先在 Supabase 中创建 Store 数据</div>';
+        return;
+      }
+
+      var html = '';
+      stores.forEach(function(s) {
+        var sid = s.store_id;
+        html += '<div class="qr-card">' +
+          '<h4>' + escHtml(s.name) + '</h4>' +
+          '<div id="qr-' + sid + '"></div>' +
+          '<div class="qr-hint">链接: ' + baseUrl + '?store=' + sid + '</div>' +
+          '</div>';
+      });
+      document.getElementById('qrContainer').innerHTML = html;
+
+      setTimeout(function() {
+        stores.forEach(function(s) {
+          var sid = s.store_id;
+          var url = baseUrl + '?store=' + sid;
+          var el = document.getElementById('qr-' + sid);
+          if (el) {
+            new QRCode(el, {
+              text: url,
+              width: 180,
+              height: 180,
+              colorDark: '#000',
+              colorLight: '#fff'
+            });
+          }
+        });
+      }, 100);
+    }
+
+    // ====== Tab切换 ======
+    window.switchTab = function(tab) {
+      document.querySelectorAll('.tab-nav button').forEach(function(b) {
+        b.className = b.dataset.tab === tab ? 'active' : '';
+      });
+      document.querySelectorAll('.tab-content').forEach(function(c) { c.style.display = 'none'; });
+      document.getElementById('tab-' + tab).style.display = '';
+      if (tab === 'qrcode') loadQRCodes();
+    };
+
+    // ====== 工具函数 ======
+    function dateStr(d) {
+      var y = d.getFullYear();
+      var m = ('0' + (d.getMonth() + 1)).slice(-2);
+      var day = ('0' + d.getDate()).slice(-2);
+      return y + '-' + m + '-' + day;
+    }
+
+    function fmtTime(d) {
+      if (!d) return '--';
+      var h = ('0' + d.getHours()).slice(-2);
+      var m = ('0' + d.getMinutes()).slice(-2);
+      return h + ':' + m;
+    }
+
+    function calcHoursStr(start, end) {
+      if (!start || !end) return '--';
+      var diff = end.getTime() - start.getTime();
+      var hrs = Math.floor(diff / 3600000);
+      var mins = Math.floor((diff % 3600000) / 60000);
+      if (hrs > 0) return hrs + 'h ' + mins + 'min';
+      return mins + 'min';
+    }
+
+    function fmtHoursMin(totMin) {
+      if (totMin <= 0) return '--';
+      var hrs = Math.floor(totMin / 60);
+      var mins = Math.round(totMin % 60);
+      if (hrs > 0) return hrs + 'h ' + mins + 'min';
+      return mins + 'min';
+    }
+
+    function escHtml(s) {
+      if (!s) return '';
+      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+  })();
+  </script>
+</body>
+</html>

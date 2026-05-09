@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>兼职打卡</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="checkin-page">
+
+  <div class="store-header">
+    <div class="icon">📍</div>
+    <h1 id="storeName">加载中...</h1>
+    <div class="store-tag" id="storeTag"></div>
+  </div>
+
+  <!-- 员工选择 -->
+  <div class="employee-picker" id="pickerArea" style="display:none">
+    <h2>请选择你的姓名</h2>
+    <div class="name-list" id="nameList"></div>
+  </div>
+
+  <!-- 打卡状态 -->
+  <div class="checkin-status" id="statusArea" style="display:none">
+    <div class="welcome-text">你好，<span class="name" id="empName"></span></div>
+    <div class="status-badge" id="statusBadge"></div>
+    <div class="time-info" id="timeInfo"></div>
+  </div>
+
+  <!-- 操作按钮 -->
+  <div class="action-area" id="actionArea" style="display:none">
+    <button class="btn-checkin" id="btnCheckin" onclick="doCheckIn()">到岗签到</button>
+    <button class="btn-checkout" id="btnCheckout" onclick="doCheckOut()">离岗签退</button>
+    <button class="btn-change-name" id="btnChange" onclick="clearName()">切换姓名</button>
+  </div>
+
+  <div class="footer-info">兼职在岗打卡系统</div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/dist/umd/supabase.min.js"></script>
+  <script src="js/config.js"></script>
+  <script>
+  (function() {
+    var storeId = getParam('store');
+    if (!storeId) {
+      showError('请扫描正确的门店二维码');
+      return;
+    }
+
+    var currentName = null;
+    var currentRecord = null;
+
+    init();
+
+    function init() {
+      loadStore().then(function() {
+        return loadRoster();
+      }).then(function(roster) {
+        if (roster.length === 0) {
+          document.getElementById('storeName').textContent = '暂无花名册';
+          document.getElementById('storeTag').textContent = '请联系管理员添加员工';
+          return;
+        }
+        var savedName = localStorage.getItem(attKey());
+        if (savedName && roster.indexOf(savedName) !== -1) {
+          selectEmployee(savedName);
+        } else {
+          if (savedName) localStorage.removeItem(attKey());
+          showPicker(roster);
+        }
+      }).catch(function(err) {
+        showError('加载失败: ' + (err.message || '网络错误'));
+      });
+    }
+
+    function loadStore() {
+      return db.from('store').select('*').eq('store_id', storeId).single()
+        .then(function(_ref) {
+          var data = _ref.data, error = _ref.error;
+          if (error || !data) throw new Error('门店不存在');
+          document.getElementById('storeName').textContent = data.name;
+          document.getElementById('storeTag').textContent = storeId;
+        });
+    }
+
+    function loadRoster() {
+      return db.from('roster').select('name').eq('store_id', storeId).order('name')
+        .then(function(_ref2) {
+          var data = _ref2.data, error = _ref2.error;
+          if (error) throw error;
+          return (data || []).map(function(r) { return r.name; });
+        });
+    }
+
+    function showPicker(roster) {
+      var list = document.getElementById('nameList');
+      list.innerHTML = roster.map(function(n) {
+        return '<button class="name-btn" onclick="pickName(\'' + esc(n) + '\')">' + escHtml(n) + '</button>';
+      }).join('');
+      document.getElementById('pickerArea').style.display = '';
+      document.getElementById('statusArea').style.display = 'none';
+      document.getElementById('actionArea').style.display = 'none';
+    }
+
+    function selectEmployee(name) {
+      currentName = name;
+      localStorage.setItem(attKey(), name);
+      document.getElementById('pickerArea').style.display = 'none';
+      document.getElementById('empName').textContent = name;
+      document.getElementById('statusArea').style.display = '';
+      document.getElementById('actionArea').style.display = '';
+      loadStatus();
+    }
+
+    function loadStatus() {
+      var today = dateStr(new Date());
+      return db.from('check_record')
+        .select('*').eq('store_id', storeId).eq('name', currentName)
+        .eq('date', today).order('check_in', { ascending: false }).limit(1)
+        .then(function(_ref3) {
+          var data = _ref3.data, error = _ref3.error;
+          if (error) throw error;
+          var rec = (data && data.length > 0) ? data[0] : null;
+          if (!rec || rec.check_out) {
+            currentRecord = null;
+            showNoneStatus(rec);
+          } else {
+            currentRecord = rec;
+            showCheckedInStatus(rec);
+          }
+        }).catch(function() {
+          currentRecord = null;
+          showNoneStatus(null);
+        });
+    }
+
+    function showNoneStatus(lastRec) {
+      var badge = document.getElementById('statusBadge');
+      badge.textContent = '未打卡';
+      badge.className = 'status-badge none';
+
+      var info = document.getElementById('timeInfo');
+      if (lastRec) {
+        var ci = new Date(lastRec.check_in);
+        var co = lastRec.check_out ? new Date(lastRec.check_out) : null;
+        info.innerHTML =
+          '<div class="time-row"><span class="label">上次到岗</span><span class="value">' + fmtTime(ci) + '</span></div>' +
+          '<div class="time-row"><span class="label">上次离岗</span><span class="value">' + fmtTime(co) + '</span></div>' +
+          '<div class="hours-highlight">上次在岗 ' + calcHours(ci, co) + '</div>';
+      } else {
+        info.innerHTML = '<div style="color:#999;padding:10px">今天还没有打卡记录</div>';
+      }
+
+      document.getElementById('btnCheckin').style.display = '';
+      document.getElementById('btnCheckout').style.display = 'none';
+    }
+
+    function showCheckedInStatus(rec) {
+      var ci = new Date(rec.check_in);
+      var badge = document.getElementById('statusBadge');
+      badge.textContent = '已到岗';
+      badge.className = 'status-badge in';
+
+      document.getElementById('timeInfo').innerHTML =
+        '<div class="time-row"><span class="label">到岗时间</span><span class="value">' + fmtTime(ci) + '</span></div>';
+
+      document.getElementById('btnCheckin').style.display = 'none';
+      document.getElementById('btnCheckout').style.display = '';
+    }
+
+    function showCheckedOutStatus(rec) {
+      var ci = new Date(rec.check_in);
+      var co = new Date(rec.check_out);
+      var badge = document.getElementById('statusBadge');
+      badge.textContent = '已离岗';
+      badge.className = 'status-badge out';
+
+      document.getElementById('timeInfo').innerHTML =
+        '<div class="time-row"><span class="label">到岗时间</span><span class="value">' + fmtTime(ci) + '</span></div>' +
+        '<div class="time-row"><span class="label">离岗时间</span><span class="value">' + fmtTime(co) + '</span></div>' +
+        '<div class="hours-highlight">本次在岗 ' + calcHours(ci, co) + '</div>';
+
+      document.getElementById('btnCheckin').style.display = '';
+      document.getElementById('btnCheckout').style.display = 'none';
+    }
+
+    // --- Actions ---
+    window.pickName = function(name) {
+      selectEmployee(name);
+    };
+
+    window.doCheckIn = function() {
+      var now = new Date();
+      db.from('check_record').insert({
+        store_id: storeId,
+        name: currentName,
+        check_in: now.toISOString(),
+        date: dateStr(now)
+      }).select().single().then(function(_ref4) {
+        var data = _ref4.data, error = _ref4.error;
+        if (error) throw error;
+        currentRecord = data;
+        showCheckedInStatus(data);
+        toast('签到成功 ' + fmtTime(now));
+      }).catch(function(err) {
+        toast('签到失败: ' + (err.message || '网络错误'), 'error');
+      });
+    };
+
+    window.doCheckOut = function() {
+      if (!currentRecord) {
+        toast('未找到签到记录', 'error');
+        return;
+      }
+      var now = new Date();
+      db.from('check_record').update({ check_out: now.toISOString() })
+        .eq('id', currentRecord.id).select().single()
+        .then(function(_ref5) {
+          var data = _ref5.data, error = _ref5.error;
+          if (error) throw error;
+          currentRecord = data;
+          showCheckedOutStatus(data);
+          toast('签退成功 ' + fmtTime(now));
+        }).catch(function(err) {
+          toast('签退失败: ' + (err.message || '网络错误'), 'error');
+        });
+    };
+
+    window.clearName = function() {
+      localStorage.removeItem(attKey());
+      currentName = null;
+      currentRecord = null;
+      loadRoster().then(function(roster) {
+        showPicker(roster);
+      });
+    };
+
+    // --- Helpers ---
+    function attKey() { return 'attendance-name-' + storeId; }
+
+    function getParam(n) { return new URLSearchParams(location.search).get(n); }
+
+    function dateStr(d) {
+      var y = d.getFullYear();
+      var m = ('0' + (d.getMonth() + 1)).slice(-2);
+      var day = ('0' + d.getDate()).slice(-2);
+      return y + '-' + m + '-' + day;
+    }
+
+    function fmtTime(d) {
+      if (!d) return '--';
+      var h = ('0' + d.getHours()).slice(-2);
+      var m = ('0' + d.getMinutes()).slice(-2);
+      return h + ':' + m;
+    }
+
+    function calcHours(start, end) {
+      if (!start || !end) return '--';
+      var diff = end.getTime() - start.getTime();
+      var hrs = Math.floor(diff / 3600000);
+      var mins = Math.floor((diff % 3600000) / 60000);
+      if (hrs > 0) return hrs + '小时' + mins + '分钟';
+      return mins + '分钟';
+    }
+
+    function esc(s) { return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+    function escHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+    function showError(msg) {
+      document.getElementById('storeName').textContent = '出错了';
+      document.getElementById('storeTag').textContent = msg;
+    }
+
+    function toast(msg, type) {
+      type = type || 'success';
+      var el = document.createElement('div');
+      el.className = 'toast ' + type;
+      el.textContent = msg;
+      document.body.appendChild(el);
+      setTimeout(function() { el.remove(); }, 2500);
+    }
+  })();
+  </script>
+</body>
+</html>
