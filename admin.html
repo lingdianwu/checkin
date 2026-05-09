@@ -11,10 +11,8 @@
   <!-- 登录界面 -->
   <div class="admin-login" id="loginBox">
     <h1>管理后台</h1>
-    <select id="loginStore" style="width:100%;padding:12px;font-size:15px;border:2px solid #d0d7e2;border-radius:10px;outline:none;margin-bottom:10px;background:#fff">
-      <option value="">超级管理员（全部门店）</option>
-    </select>
-    <input type="password" id="pwdInput" placeholder="请输入管理密码" onkeydown="if(event.key==='Enter')doLogin()">
+    <input type="tel" id="loginPhone" placeholder="手机号" style="margin-bottom:10px" onkeydown="if(event.key==='Enter')document.getElementById('pwdInput').focus()">
+    <input type="password" id="pwdInput" placeholder="密码" onkeydown="if(event.key==='Enter')doLogin()">
     <button onclick="doLogin()">登 录</button>
     <p id="loginError" style="color:#f44336;margin-top:12px;font-size:14px;display:none"></p>
   </div>
@@ -98,7 +96,6 @@
           <input type="text" id="newStoreName" placeholder="门店名称">
           <input type="text" id="newStoreLat" placeholder="纬度（如 39.9042）" style="width:150px">
           <input type="text" id="newStoreLng" placeholder="经度（如 116.4074）" style="width:150px">
-          <input type="password" id="newStorePwd" placeholder="管理员密码（可选）" style="width:150px">
           <button class="btn-primary" onclick="addStore()">添加门店</button>
         </div>
         <p style="font-size:12px;color:#999;margin:-8px 0 12px">
@@ -108,6 +105,17 @@
       <div class="store-mgmt-section">
         <h3>现有门店</h3>
         <div id="storeListContainer"><div class="loading">加载中</div></div>
+      </div>
+      <div class="store-mgmt-section">
+        <h3>管理员账号</h3>
+        <div class="store-add">
+          <select id="adminStore"><option value="">选择门店</option></select>
+          <input type="text" id="adminName" placeholder="姓名">
+          <input type="tel" id="adminPhone" placeholder="手机号（登录用）">
+          <input type="password" id="adminPwd" placeholder="密码">
+          <button class="btn-primary" onclick="addAdminUser()">添加管理员</button>
+        </div>
+        <div id="adminListContainer"><div class="loading">加载中</div></div>
       </div>
     </div>
 
@@ -156,45 +164,35 @@
   <script>
   (function() {
     // ====== 登录 ======
-    var gAdminStoreId = ''; // 空=超级管理员，非空=门店管理员
-
-    // 加载登录页门店列表
-    db.from('store').select('store_id,name').order('store_id').then(function(r) {
-      if (r.error) return;
-      (r.data || []).forEach(function(s) {
-        var opt = document.createElement('option');
-        opt.value = s.store_id;
-        opt.textContent = s.name + ' 管理员';
-        document.getElementById('loginStore').appendChild(opt);
-      });
-    });
+    var gAdminStoreId = '';  // 登录人的门店
+    var gAdminName = '';     // 登录人姓名
+    var gIsSuper = false;    // 是否超级管理员
 
     window.doLogin = function() {
+      var phone = document.getElementById('loginPhone').value.trim();
       var pwd = document.getElementById('pwdInput').value.trim();
-      var storeId = document.getElementById('loginStore').value;
-      if (!pwd) return;
-      if (!storeId) {
-        // 超级管理员：用全局密码
-        checkGlobalPwd(pwd).then(function(ok) {
-          if (ok) loginOk('');
-          else showLoginErr('密码错误');
-        }).catch(function(err) { showLoginErr('验证失败: ' + (err.message || '网络错误')); });
-      } else {
-        // 门店管理员：先查门店专属密码，无则用全局密码
-        db.from('store').select('admin_password').eq('store_id', storeId).single()
-          .then(function(r) {
-            var storePwd = r.data && r.data.admin_password;
-            if (storePwd) {
-              if (storePwd === pwd) { loginOk(storeId); }
-              else { showLoginErr('密码错误'); }
-            } else {
-              return checkGlobalPwd(pwd).then(function(ok) {
-                if (ok) loginOk(storeId);
-                else showLoginErr('密码错误');
-              });
-            }
-          }).catch(function(err) { showLoginErr('验证失败: ' + (err.message || '网络错误')); });
-      }
+      if (!phone || !pwd) return;
+
+      // 先检查全局密码（超级管理员）
+      checkGlobalPwd(pwd).then(function(ok) {
+        if (ok) {
+          gAdminStoreId = ''; gAdminName = '超级管理员'; gIsSuper = true;
+          loginOk();
+          return Promise.reject('done');
+        }
+        // 查 admin_user 表
+        return db.from('admin_user').select('*').eq('phone', phone).single();
+      }).then(function(r) {
+        if (r === 'done') return;
+        if (r.error || !r.data) { showLoginErr('账号不存在'); return; }
+        if (r.data.password !== pwd) { showLoginErr('密码错误'); return; }
+        gAdminStoreId = r.data.store_id;
+        gAdminName = r.data.name;
+        gIsSuper = false;
+        loginOk();
+      }).catch(function(err) {
+        if (err !== 'done') showLoginErr('验证失败: ' + (err.message || '网络错误'));
+      });
     };
 
     function showLoginErr(msg) {
@@ -214,14 +212,15 @@
         });
     }
 
-    function loginOk(storeId) {
-      gAdminStoreId = storeId;
+    function loginOk() {
       sessionStorage.setItem('admin-logged-in', '1');
-      sessionStorage.setItem('admin-store', storeId);
+      sessionStorage.setItem('admin-store', gAdminStoreId);
+      sessionStorage.setItem('admin-name', gAdminName);
+      sessionStorage.setItem('admin-super', gIsSuper ? '1' : '');
       document.getElementById('loginBox').style.display = 'none';
       document.getElementById('mainBox').style.display = '';
-      if (storeId) {
-        document.querySelectorAll('.tab-nav button[data-tab="stores"]').forEach(function(b) { b.style.display = 'none'; });
+      if (!gIsSuper) {
+        document.querySelectorAll('.tab-nav button[data-tab="stores"], .tab-nav button[data-tab="qrcode"]').forEach(function(b) { b.style.display = 'none'; });
       }
       initMain();
     }
@@ -229,15 +228,19 @@
     window.doLogout = function() {
       sessionStorage.removeItem('admin-logged-in');
       sessionStorage.removeItem('admin-store');
+      sessionStorage.removeItem('admin-name');
+      sessionStorage.removeItem('admin-super');
       location.reload();
     };
 
     if (sessionStorage.getItem('admin-logged-in') === '1') {
       gAdminStoreId = sessionStorage.getItem('admin-store') || '';
+      gAdminName = sessionStorage.getItem('admin-name') || '';
+      gIsSuper = !!sessionStorage.getItem('admin-super');
       document.getElementById('loginBox').style.display = 'none';
       document.getElementById('mainBox').style.display = '';
-      if (gAdminStoreId) {
-        document.querySelectorAll('.tab-nav button[data-tab="stores"]').forEach(function(b) { b.style.display = 'none'; });
+      if (!gIsSuper) {
+        document.querySelectorAll('.tab-nav button[data-tab="stores"], .tab-nav button[data-tab="qrcode"]').forEach(function(b) { b.style.display = 'none'; });
       }
       initMain();
     }
@@ -263,6 +266,7 @@
           document.getElementById('filterStore').innerHTML = '<option value="">全部门店</option>' + opts;
           document.getElementById('rosterStore').innerHTML = '<option value="">选择门店</option>' + opts;
           document.getElementById('batchStore').innerHTML = '<option value="">选择门店</option>' + opts;
+          document.getElementById('adminStore').innerHTML = '<option value="">选择门店</option>' + opts;
           // 门店管理员：锁定筛选项
           if (gAdminStoreId) {
             document.getElementById('filterStore').value = gAdminStoreId;
@@ -273,6 +277,7 @@
           loadRecords();
           loadRosterList();
           loadStoreList();
+          loadAdminList();
         });
     }
 
@@ -489,8 +494,7 @@
           return db.from('store').insert({
             store_id: sid, name: sname,
             lat: isNaN(lat) ? null : lat,
-            lng: isNaN(lng) ? null : lng,
-            admin_password: document.getElementById('newStorePwd').value.trim() || null
+            lng: isNaN(lng) ? null : lng
           });
         }).then(function(res) {
           if (res && res.error) throw res.error;
@@ -509,27 +513,66 @@
         return;
       }
       document.getElementById('storeListContainer').innerHTML =
-        '<table class="store-table"><thead><tr><th>门店ID</th><th>名称</th><th>坐标</th><th>管理员密码</th><th>今日码</th><th>操作</th></tr></thead><tbody>' +
+        '<table class="store-table"><thead><tr><th>门店ID</th><th>名称</th><th>坐标</th><th>今日码</th><th>操作</th></tr></thead><tbody>' +
         stores.map(function(s) {
           var coord = (s.lat && s.lng) ? s.lat.toFixed(4) + ', ' + s.lng.toFixed(4) : '未设置';
           return '<tr>' +
             '<td>' + escHtml(s.store_id) + '</td>' +
             '<td>' + escHtml(s.name) + '</td>' +
             '<td>' + coord + '</td>' +
-            '<td><input type="text" id="spwd-' + s.store_id + '" value="' + (s.admin_password || '') + '" placeholder="无" style="width:100px;padding:4px 8px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none">' +
-            ' <button class="btn-success" onclick="saveStorePwd(\'' + s.store_id + '\')">保存</button></td>' +
             '<td>' + (s.daily_code || '--') + '</td>' +
             '<td><button class="del-link" onclick="delStore(\'' + s.store_id + '\')">删除</button></td>' +
             '</tr>';
         }).join('') + '</tbody></table>';
     }
 
-    window.saveStorePwd = function(sid) {
-      var pwd = document.getElementById('spwd-' + sid).value.trim();
-      db.from('store').update({ admin_password: pwd || null }).eq('store_id', sid)
-        .then(function(r) { if (r.error) throw r.error; loadStores(); })
-        .catch(function(e) { alert('保存失败: ' + (e.message || '网络错误')); });
+    window.addAdminUser = function() {
+      var sid = document.getElementById('adminStore').value;
+      var name = document.getElementById('adminName').value.trim();
+      var phone = document.getElementById('adminPhone').value.trim();
+      var pwd = document.getElementById('adminPwd').value.trim();
+      if (!sid) { alert('请选择门店'); return; }
+      if (!name) { alert('请输入姓名'); return; }
+      if (!/^1\d{10}$/.test(phone)) { alert('请输入正确的11位手机号'); return; }
+      if (!pwd || pwd.length < 4) { alert('密码至少4位'); return; }
+      db.from('admin_user').select('id').eq('phone', phone).single()
+        .then(function(r) { if (r.data) { alert('该手机号已存在'); return Promise.reject('dup'); }
+          return db.from('admin_user').insert({ store_id: sid, name: name, phone: phone, password: pwd });
+        }).then(function(res) {
+          if (res && res.error) throw res.error;
+          document.getElementById('adminName').value = '';
+          document.getElementById('adminPhone').value = '';
+          document.getElementById('adminPwd').value = '';
+          loadAdminList();
+        }).catch(function(e) { if (e !== 'dup') alert('添加失败: ' + (e.message || '网络错误')); });
     };
+    window.delAdminUser = function(id) {
+      if (!confirm('确认删除？')) return;
+      db.from('admin_user').delete().eq('id', id)
+        .then(function(r) { if (r.error) throw r.error; loadAdminList(); })
+        .catch(function(e) { alert('删除失败: ' + (e.message || '网络错误')); });
+    };
+    function loadAdminList() {
+      db.from('admin_user').select('*').order('store_id').order('name')
+        .then(function(r) {
+          if (r.error) throw r.error;
+          var list = r.data || [];
+          if (list.length === 0) {
+            document.getElementById('adminListContainer').innerHTML = '<div class="empty-state">暂无管理员账号</div>';
+            return;
+          }
+          document.getElementById('adminListContainer').innerHTML =
+            '<table class="roster-table"><thead><tr><th>门店</th><th>姓名</th><th>手机号</th><th>操作</th></tr></thead><tbody>' +
+            list.map(function(a) {
+              return '<tr>' +
+                '<td>' + escHtml(gSN(a.store_id)) + '</td>' +
+                '<td>' + escHtml(a.name) + '</td>' +
+                '<td>' + a.phone + '</td>' +
+                '<td><button class="btn-danger" onclick="delAdminUser(\'' + a.id + '\')">删除</button></td>' +
+                '</tr>';
+            }).join('') + '</tbody></table>';
+        });
+    }
     window.delStore = function(sid) {
       if (!confirm('删除门店将同时删除该门店的所有数据，确认？')) return;
       Promise.all([

@@ -10,12 +10,20 @@ CREATE TABLE IF NOT EXISTS store (
   name TEXT NOT NULL,
   lat FLOAT,
   lng FLOAT,
-  admin_password TEXT,
   daily_code TEXT,
   daily_code_time TIMESTAMPTZ
 );
 
--- 2. 花名册表
+-- 2. 管理员账号表
+CREATE TABLE IF NOT EXISTS admin_user (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  store_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  phone TEXT NOT NULL UNIQUE,
+  password TEXT NOT NULL
+);
+
+-- 3. 花名册表
 CREATE TABLE IF NOT EXISTS roster (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   store_id TEXT NOT NULL,
@@ -48,11 +56,13 @@ CREATE TABLE IF NOT EXISTS app_config (
 -- 本系统为内部使用，开放全部操作权限
 -- ============================================
 ALTER TABLE store ENABLE ROW LEVEL SECURITY;
+ALTER TABLE admin_user ENABLE ROW LEVEL SECURITY;
 ALTER TABLE roster ENABLE ROW LEVEL SECURITY;
 ALTER TABLE check_record ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_config ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "allow_all" ON store FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "allow_all" ON admin_user FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "allow_all" ON roster FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "allow_all" ON check_record FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "allow_all" ON app_config FOR ALL USING (true) WITH CHECK (true);
