@@ -89,6 +89,7 @@
     var storeLat = null;
     var storeLng = null;
     var dailySecret = null;
+    var cutoffHour = 2; // 默认凌晨2点
 
     init();
 
@@ -140,11 +141,13 @@
     }
 
     function loadAppConfig() {
-      return db.from('app_config').select('daily_secret').limit(1).single()
+      return db.from('app_config').select('*').limit(1).single()
         .then(function(r) {
           dailySecret = (r.data && r.data.daily_secret) || null;
+          cutoffHour = (r.data && r.data.cutoff_hour != null) ? r.data.cutoff_hour : 2;
         }).catch(function() {
           dailySecret = null;
+          cutoffHour = 2;
         });
     }
 
@@ -260,7 +263,7 @@
           }
           // 未签退的记录，判断是否过期（隔天凌晨2点后自动作废）
           var now = new Date();
-          if (rec.date === yesterday && now.getHours() >= 2) {
+          if (rec.date === yesterday && now.getHours() >= cutoffHour) {
             currentRecord = null;
             renderNoneStatus(rec);
           } else {

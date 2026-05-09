@@ -36,7 +36,8 @@ CREATE TABLE IF NOT EXISTS check_record (
 CREATE TABLE IF NOT EXISTS app_config (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   admin_password TEXT NOT NULL,
-  daily_secret TEXT
+  daily_secret TEXT,
+  cutoff_hour INTEGER DEFAULT 2
 );
 
 -- ============================================
