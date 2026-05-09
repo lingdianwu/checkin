@@ -173,8 +173,7 @@
       document.getElementById('phoneDisplay').textContent = currentPhone ? maskPhone(currentPhone) : '';
       document.getElementById('statusArea').style.display = '';
       document.getElementById('actionArea').style.display = '';
-      document.getElementById('btnChange').textContent = '切换身份';
-      document.getElementById('btnChange').onclick = clearIdentity;
+      document.getElementById('btnChange').style.display = 'none';
       loadCheckStatus();
     }
 
