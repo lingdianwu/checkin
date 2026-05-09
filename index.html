@@ -243,16 +243,24 @@
       verifyLocation().then(function() { showStatus(); }).catch(function() {});
     };
 
-    // --- 打卡状态 ---
+    // --- 打卡状态（隔天凌晨2点自动过期） ---
     function loadCheckStatus() {
       var today = dateStr(new Date());
+      var yesterday = dateStr(new Date(Date.now() - 86400000));
       db.from('check_record').select('*')
         .eq('store_id', storeId).eq('name', currentName)
-        .eq('date', today).order('check_in', { ascending: false }).limit(1)
+        .gte('date', yesterday).order('check_in', { ascending: false }).limit(2)
         .then(function(_ref3) {
           if (_ref3.error) throw _ref3.error;
           var rec = (_ref3.data && _ref3.data.length > 0) ? _ref3.data[0] : null;
           if (!rec || rec.check_out) {
+            currentRecord = null;
+            renderNoneStatus(rec);
+            return;
+          }
+          // 未签退的记录，判断是否过期（隔天凌晨2点后自动作废）
+          var now = new Date();
+          if (rec.date === yesterday && now.getHours() >= 2) {
             currentRecord = null;
             renderNoneStatus(rec);
           } else {
