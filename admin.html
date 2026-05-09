@@ -70,6 +70,16 @@
         </div>
       </div>
       <div class="roster-section">
+        <h3>批量导入</h3>
+        <p style="font-size:12px;color:#999;margin-bottom:8px">格式：<b>姓名,手机号</b> 每行一个</p>
+        <div class="roster-add">
+          <select id="batchStore"><option value="">选择门店</option></select>
+        </div>
+        <textarea id="batchText" placeholder="张三,13800001111&#10;李四,13800002222&#10;王五,13800003333" style="width:100%;height:120px;padding:12px;font-size:14px;border:1px solid #d0d7e2;border-radius:8px;outline:none;resize:vertical;margin-bottom:8px"></textarea>
+        <button onclick="batchImport()" style="padding:10px 24px;font-size:14px;font-weight:500;background:#4a90d9;color:#fff;border:none;border-radius:8px;cursor:pointer">批量导入</button>
+        <span id="batchMsg" style="margin-left:12px;font-size:13px;color:#888"></span>
+      </div>
+      <div class="roster-section">
         <h3>员工列表</h3>
         <div id="rosterListContainer"><div class="loading">加载中</div></div>
       </div>
@@ -189,6 +199,7 @@
           }).join('');
           document.getElementById('filterStore').innerHTML = '<option value="">全部门店</option>' + opts;
           document.getElementById('rosterStore').innerHTML = '<option value="">选择门店</option>' + opts;
+          document.getElementById('batchStore').innerHTML = '<option value="">选择门店</option>' + opts;
           loadRecords();
           loadRosterList();
           loadStoreList();
@@ -265,6 +276,58 @@
           document.getElementById('rosterPhone').value = '';
           loadRosterList();
         }).catch(function(e) { if (e !== 'dup') alert('添加失败: ' + (e.message || '网络错误')); });
+    };
+
+    window.batchImport = function() {
+      var storeId = document.getElementById('batchStore').value;
+      var text = document.getElementById('batchText').value.trim();
+      var msgEl = document.getElementById('batchMsg');
+      if (!storeId) { msgEl.textContent = '请选择门店'; msgEl.style.color = '#f44336'; return; }
+      if (!text) { msgEl.textContent = '请输入员工数据'; msgEl.style.color = '#f44336'; return; }
+      var lines = text.split(/[\r\n]+/).filter(function(l) { return l.trim(); });
+      var items = [];
+      var errors = [];
+      lines.forEach(function(line, idx) {
+        var parts = line.split(/[,，]/);
+        var name = (parts[0] || '').trim();
+        var phone = (parts[1] || '').trim();
+        if (!name) { errors.push('第' + (idx + 1) + '行缺少姓名'); return; }
+        if (phone && !/^1\d{10}$/.test(phone)) { errors.push('第' + (idx + 1) + '行手机号格式错误: ' + phone); return; }
+        items.push({ store_id: storeId, name: name, phone: phone || null });
+      });
+      if (errors.length) {
+        msgEl.textContent = errors.join('; '); msgEl.style.color = '#f44336'; return;
+      }
+      if (items.length === 0) { msgEl.textContent = '没有可导入的数据'; msgEl.style.color = '#f44336'; return; }
+      msgEl.textContent = '正在导入 ' + items.length + ' 人...'; msgEl.style.color = '#888';
+      // 先查重
+      db.from('roster').select('name,phone').eq('store_id', storeId).then(function(r) {
+        var existing = r.data || [];
+        var existKeys = {};
+        existing.forEach(function(e) {
+          existKeys[e.name] = (e.phone || '');
+        });
+        var toInsert = [];
+        var skipped = [];
+        items.forEach(function(it) {
+          var ek = existKeys[it.name];
+          if (ek !== undefined) { skipped.push(it.name); return; }
+          toInsert.push(it);
+        });
+        if (skipped.length) { msgEl.textContent = '已跳过重复: ' + skipped.join(', ') + '，其余导入中...'; msgEl.style.color = '#e65100'; }
+        if (toInsert.length === 0) {
+          if (!skipped.length) { msgEl.textContent = '没有需要导入的数据'; msgEl.style.color = '#888'; }
+          return;
+        }
+        return db.from('roster').insert(toInsert);
+      }).then(function(res) {
+        if (res && res.error) throw res.error;
+        document.getElementById('batchText').value = '';
+        msgEl.textContent = '成功导入 ' + items.length + ' 人' + (errors.length ? '，跳过 ' + errors.length + ' 条' : ''); msgEl.style.color = '#4caf50';
+        loadRosterList();
+      }).catch(function(err) {
+        msgEl.textContent = '导入失败: ' + (err.message || '网络错误'); msgEl.style.color = '#f44336';
+      });
     };
 
     function loadRosterList() {
