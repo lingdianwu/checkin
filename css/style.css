@@ -454,6 +454,16 @@ input:focus, select:focus, textarea:focus {
 }
 .roster-add input { flex: 1; min-width: 120px; }
 
+/* 文件选择按钮 */
+.file-input-label {
+  display: flex; align-items: center;
+  padding: 10px 14px; font-size: 14px;
+  border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--card); color: var(--text-secondary);
+  transition: all var(--transition); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.file-input-label:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+
 /* 批量导入文本域 */
 .roster-section textarea {
   border: 1.5px solid var(--border) !important;
