@@ -67,16 +67,19 @@
     var phoneToName = {};
     var storeLat = null;
     var storeLng = null;
-    var storeDailyCode = null;
+    var dailySecret = null;
 
     init();
 
     function init() {
-      loadStore().then(function() {
-        // 验证动态码
-        if (storeDailyCode && storeDailyCode !== urlCode) {
-          showError('二维码已失效', '请扫描今日最新二维码');
-          return;
+      Promise.all([loadStore(), loadAppConfig()]).then(function() {
+        // 验证动态码（自动每日变化）
+        if (dailySecret && urlCode) {
+          var expected = computeDailyCode(dailySecret, storeId);
+          if (expected !== urlCode.toUpperCase()) {
+            showError('二维码已失效', '请扫描今日最新二维码');
+            return;
+          }
         }
         return loadRoster();
       }).then(function() {
@@ -108,7 +111,15 @@
           document.getElementById('storeTag').textContent = storeId;
           storeLat = _ref.data.lat || null;
           storeLng = _ref.data.lng || null;
-          storeDailyCode = _ref.data.daily_code || null;
+        });
+    }
+
+    function loadAppConfig() {
+      return db.from('app_config').select('daily_secret').limit(1).single()
+        .then(function(r) {
+          dailySecret = (r.data && r.data.daily_secret) || null;
+        }).catch(function() {
+          dailySecret = null;
         });
     }
 
@@ -311,6 +322,19 @@
 
     // --- GPS距离计算 (Haversine) ---
     function haversine(lat1, lng1, lat2, lng2) {
+
+    // --- 每日码计算 ---
+    function computeDailyCode(secret, sid) {
+      var today = dateStr(new Date());
+      var input = secret + '|' + sid + '|' + today;
+      var hash = 5381;
+      for (var i = 0; i < input.length; i++) {
+        hash = ((hash << 5) + hash + input.charCodeAt(i)) | 0;
+      }
+      return Math.abs(hash).toString(36).substring(0, 6).toUpperCase();
+    }
+
+    // --- GPS距离计算 (Haversine) ---
       var R = 6371000; // 地球半径（米）
       var dLat = (lat2 - lat1) * Math.PI / 180;
       var dLng = (lng2 - lng1) * Math.PI / 180;

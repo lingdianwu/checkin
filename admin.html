@@ -98,11 +98,20 @@
 
     <!-- 二维码 -->
     <div class="tab-content" id="tab-qrcode" style="display:none">
+      <div id="secretSetup" style="background:#fff;border-radius:12px;padding:20px;margin-bottom:20px;box-shadow:0 2px 6px rgba(0,0,0,0.05);display:none">
+        <h3 style="margin-bottom:8px">每日密钥</h3>
+        <p style="font-size:13px;color:#999;margin-bottom:12px">设置一个密钥，二维码每日自动变化，无需手动刷新</p>
+        <div style="display:flex;gap:10px">
+          <input type="text" id="secretInput" placeholder="输入任意字符串作为密钥" style="flex:1;padding:10px 14px;font-size:14px;border:1px solid #d0d7e2;border-radius:8px;outline:none">
+          <button onclick="saveSecret()" style="padding:10px 20px;font-size:14px;font-weight:500;background:#4a90d9;color:#fff;border:none;border-radius:8px;cursor:pointer;white-space:nowrap">保存密钥</button>
+        </div>
+        <p id="secretMsg" style="font-size:13px;margin-top:8px"></p>
+      </div>
       <p style="margin-bottom:8px;color:#666;font-size:14px">
         打卡链接：<code id="baseUrlDisplay" style="background:#f0f0f0;padding:2px 6px;border-radius:4px"></code>
       </p>
-      <p style="margin-bottom:16px;color:#e65100;font-size:13px">
-        每个门店每天生成一个随机码，旧码失效。建议每天上班前刷新。
+      <p style="margin-bottom:16px;color:#4caf50;font-size:13px">
+        二维码含每日自动变化的安全码，无需手动刷新。密钥泄露后重新设置即可。
       </p>
       <div class="qr-section" id="qrContainer"><div class="loading">加载中</div></div>
     </div>
@@ -373,45 +382,72 @@
       el.textContent = msg; el.style.color = ok ? '#4caf50' : '#f44336';
     }
 
-    // ====== 二维码 & 每日码 ======
-    window.refreshDailyCode = function(sid) {
-      var code = Math.random().toString(36).substring(2, 8).toUpperCase();
-      db.from('store').update({ daily_code: code, daily_code_time: new Date().toISOString() })
-        .eq('store_id', sid).then(function(r) {
-          if (r.error) { alert('刷新失败: ' + r.error.message); return; }
-          loadQRCodes();
-        });
+    // ====== 二维码 & 每日密钥 ======
+    function computeDailyCode(secret, sid) {
+      var today = dateStr(new Date());
+      var input = secret + '|' + sid + '|' + today;
+      var hash = 5381;
+      for (var i = 0; i < input.length; i++) {
+        hash = ((hash << 5) + hash + input.charCodeAt(i)) | 0;
+      }
+      return Math.abs(hash).toString(36).substring(0, 6).toUpperCase();
+    }
+
+    window.saveSecret = function() {
+      var val = document.getElementById('secretInput').value.trim();
+      if (!val) { document.getElementById('secretMsg').textContent = '请输入密钥'; document.getElementById('secretMsg').style.color = '#f44336'; return; }
+      db.from('app_config').select('*').limit(1).single().then(function(r) {
+        if (r.data) {
+          return db.from('app_config').update({ daily_secret: val }).eq('id', r.data.id);
+        } else {
+          return db.from('app_config').insert({ admin_password: 'admin123', daily_secret: val });
+        }
+      }).then(function() {
+        document.getElementById('secretMsg').textContent = '密钥已保存';
+        document.getElementById('secretMsg').style.color = '#4caf50';
+        loadQRCodes();
+      }).catch(function(e) {
+        document.getElementById('secretMsg').textContent = '保存失败: ' + (e.message || '网络错误');
+        document.getElementById('secretMsg').style.color = '#f44336';
+      });
     };
 
     function loadQRCodes() {
       document.getElementById('qrContainer').innerHTML = '<div class="loading">加载中</div>';
-      // 先重新加载门店数据
-      db.from('store').select('*').order('store_id').then(function(r) {
-        if (r.error) throw r.error;
-        window._stores = r.data || [];
+      // 加载门店和密钥
+      Promise.all([
+        db.from('store').select('*').order('store_id'),
+        db.from('app_config').select('daily_secret').limit(1).single()
+      ]).then(function(_refA) {
+        var stores = (_refA[0].data || []);
+        var secretData = _refA[1].data;
+        window._stores = stores;
+
+        var secret = (secretData && secretData.daily_secret) || '';
+        if (!secret) {
+          document.getElementById('secretSetup').style.display = '';
+        } else {
+          document.getElementById('secretSetup').style.display = 'none';
+          document.getElementById('secretInput').value = secret;
+        }
+
         var baseUrl = location.origin + location.pathname.replace(/admin\.html$/, 'index.html');
-        var stores = window._stores;
         if (stores.length === 0) {
-          document.getElementById('qrContainer').innerHTML = '<div class="empty-state">暂无门店，请先在"门店管理"中添加</div>';
+          document.getElementById('qrContainer').innerHTML = '<div class="empty-state">暂无门店</div>';
           return;
         }
         var html = stores.map(function(s) {
-          var code = s.daily_code || '';
+          var code = secret ? computeDailyCode(secret, s.store_id) : '';
           var qrUrl = baseUrl + '?store=' + s.store_id + (code ? '&code=' + code : '');
-          var codeInfo = code
-            ? '<span style="color:#4caf50">今日码: ' + code + '</span>'
-            : '<span style="color:#e65100">未设置每日码</span>';
           return '<div class="qr-card"><h4>' + escHtml(s.name) + '</h4>' +
             '<div id="qr-' + s.store_id + '"></div>' +
-            '<div class="qr-hint">' + codeInfo + '</div>' +
-            '<div class="qr-hint">' + qrUrl + '</div>' +
-            '<button onclick="refreshDailyCode(\'' + s.store_id + '\')" style="margin-top:8px;padding:6px 16px;font-size:13px;background:#4a90d9;color:#fff;border:none;border-radius:6px;cursor:pointer">刷新今日码</button>' +
+            '<div class="qr-hint">今日码: ' + (code || '<span style="color:#e65100">请先设置密钥</span>') + '</div>' +
             '</div>';
         }).join('');
         document.getElementById('qrContainer').innerHTML = html;
         setTimeout(function() {
           stores.forEach(function(s) {
-            var code = s.daily_code || '';
+            var code = secret ? computeDailyCode(secret, s.store_id) : '';
             var el = document.getElementById('qr-' + s.store_id);
             if (el) new QRCode(el, {
               text: baseUrl + '?store=' + s.store_id + (code ? '&code=' + code : ''),
