@@ -371,17 +371,17 @@
         '<table class="records-table"><thead><tr><th>姓名</th><th>门店</th><th>日期</th><th>到岗</th><th>离岗</th><th>在岗时长</th><th>操作</th></tr></thead><tbody>' +
         records.map(function(r) {
           var ci = new Date(r.check_in), co = r.check_out ? new Date(r.check_out) : null;
-          var isPastDue = !co && r.date < todayStr;
+          var needsCheckout = !co;
           var hourCell;
           if (co) {
             hourCell = calcHoursStr(ci, co);
-          } else if (isPastDue) {
+          } else if (needsCheckout && r.date < todayStr) {
             hourCell = '<span style="color:#ef4440;font-weight:600">未签退</span>';
           } else {
             hourCell = '<span style="color:#f59e0b">在岗中</span>';
           }
           var actionHtml = '<button class="btn-danger" onclick="deleteRecord(\'' + r.id + '\')">删除</button>';
-          if (isPastDue) {
+          if (needsCheckout) {
             actionHtml += ' <button class="btn-success" onclick="setCheckOut(\'' + r.id + '\',\'' + r.check_in + '\')">编辑离岗</button>';
           }
           return '<tr>' +
