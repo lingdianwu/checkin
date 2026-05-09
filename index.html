@@ -86,6 +86,7 @@
     var currentPhone = null;
     var currentRecord = null;
     var phoneToName = {};
+    var phoneToMax = {}; // max check-ins per day
     var storeLat = null;
     var storeLng = null;
     var dailySecret = null;
@@ -155,12 +156,16 @@
     }
 
     function loadRoster() {
-      return db.from('roster').select('name,phone').eq('store_id', storeId)
+      return db.from('roster').select('name,phone,max_checkins').eq('store_id', storeId)
         .then(function(_ref2) {
           if (_ref2.error) throw _ref2.error;
           phoneToName = {};
+          phoneToMax = {};
           (_ref2.data || []).forEach(function(r) {
-            if (r.phone) phoneToName[r.phone] = r.name;
+            if (r.phone) {
+              phoneToName[r.phone] = r.name;
+              phoneToMax[r.phone] = (r.max_checkins != null) ? r.max_checkins : 3;
+            }
           });
         });
     }
@@ -351,20 +356,33 @@
 
     // --- 打卡操作 ---
     window.doCheckIn = function() {
-      var now = new Date();
-      db.from('check_record').insert({
-        store_id: storeId,
-        name: currentName,
-        check_in: now.toISOString(),
-        date: dateStr(now)
-      }).select().single().then(function(_ref4) {
-        if (_ref4.error) throw _ref4.error;
-        currentRecord = _ref4.data;
-        renderCheckInDone(_ref4.data);
-        toast('签到成功，请重新扫码进行签退');
-      }).catch(function(err) {
-        toast('签到失败: ' + (err.message || '网络错误'), 'error');
-      });
+      var maxC = phoneToMax[currentPhone] || 3;
+      var today = dateStr(new Date());
+      db.from('check_record').select('id', { count: 'exact' })
+        .eq('store_id', storeId).eq('name', currentName).eq('date', today)
+        .then(function(cntRes) {
+          if (cntRes.error) throw cntRes.error;
+          var count = (cntRes.data && cntRes.data.length) || 0;
+          if (count >= maxC) {
+            toast('今日打卡次数已达上限（' + maxC + '次）', 'error');
+            return Promise.reject('limit');
+          }
+          var now = new Date();
+          return db.from('check_record').insert({
+            store_id: storeId,
+            name: currentName,
+            check_in: now.toISOString(),
+            date: dateStr(now)
+          }).select().single();
+        }).then(function(_ref4) {
+          if (_ref4 === 'limit') return;
+          if (_ref4.error) throw _ref4.error;
+          currentRecord = _ref4.data;
+          renderCheckInDone(_ref4.data);
+          toast('签到成功，请重新扫码进行签退');
+        }).catch(function(err) {
+          if (err !== 'limit') toast('签到失败: ' + (err.message || '网络错误'), 'error');
+        });
     };
 
     window.doCheckOut = function() {

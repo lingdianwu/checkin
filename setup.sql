@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS roster (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   store_id TEXT NOT NULL,
   name TEXT NOT NULL,
-  phone TEXT
+  phone TEXT,
+  max_checkins INTEGER DEFAULT 3
 );
 
 -- 3. 打卡记录表
