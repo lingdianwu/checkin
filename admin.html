@@ -14,7 +14,7 @@
     <input type="tel" id="loginPhone" placeholder="手机号（管理员）" style="margin-bottom:10px" onkeydown="if(event.key==='Enter')document.getElementById('pwdInput').focus()">
     <p style="font-size:12px;color:#999;margin:-6px 0 12px">超级管理员留空，直接输入密码</p>
     <input type="password" id="pwdInput" placeholder="密码" onkeydown="if(event.key==='Enter')doLogin()">
-    <button onclick="doLogin()">登 录</button>
+    <button class="btn-primary" onclick="doLogin()">登 录</button>
     <p id="loginError" style="color:#f44336;margin-top:12px;font-size:14px;display:none"></p>
   </div>
 
@@ -55,7 +55,7 @@
         <input type="date" id="filterDateFrom">
         <span style="color:#888">至</span>
         <input type="date" id="filterDateTo">
-        <button onclick="loadRecords()">查询</button>
+        <button class="btn-primary" onclick="loadRecords()">查询</button>
         <button class="btn-outline" onclick="exportCSV()">导出 CSV</button>
       </div>
       <div id="recordsContainer"><div class="loading">加载中</div></div>
@@ -550,7 +550,7 @@
             ['00','30'].map(function(m) { return '<option value="' + m + '"' + (parseInt(m) === (s.cutoff_minute||0) ? ' selected' : '') + '>' + m + '</option>'; }).join('') +
             '</select></td>' +
             '<td>' + (s.daily_code || '--') + '</td>' +
-            '<td><button class="del-link" onclick="delStore(\'' + s.store_id + '\')">删除</button></td>' +
+            '<td><button class="btn-danger" onclick="delStore(\'' + s.store_id + '\')">删除</button></td>' +
             '</tr>';
         }).join('') + '</tbody></table>';
     }
