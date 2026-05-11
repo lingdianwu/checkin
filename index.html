@@ -84,7 +84,6 @@
     var dailySecret = null;
     var cutoffHour = 2;
     var cutoffMinute = 0;
-    var earliestTime = null;  // 最早打卡时间 "HH:MM"
 
     init();
 
@@ -95,16 +94,6 @@
           var expected = computeDailyCode(dailySecret, storeId);
           if (expected !== urlCode.toUpperCase()) {
             showError('二维码已失效', '请扫描今日最新二维码');
-            return;
-          }
-        }
-        // 最早打卡时间检查
-        if (urlCode && earliestTime) {
-          var parts = earliestTime.split(':');
-          var etH = parseInt(parts[0], 10), etM = parseInt(parts[1], 10);
-          var now = new Date();
-          if (now.getHours() < etH || (now.getHours() === etH && now.getMinutes() < etM)) {
-            showError('未到打卡时间', '最早打卡时间为 ' + earliestTime.split(':')[0] + ':' + earliestTime.split(':')[1]);
             return;
           }
         }
@@ -140,7 +129,6 @@
           storeLng = _ref.data.lng || null;
           if (_ref.data.cutoff_hour != null) cutoffHour = _ref.data.cutoff_hour;
           if (_ref.data.cutoff_minute != null) cutoffMinute = _ref.data.cutoff_minute;
-          earliestTime = _ref.data.earliest_time || null;
         });
     }
 

@@ -13,8 +13,7 @@ CREATE TABLE IF NOT EXISTS store (
   cutoff_hour INTEGER DEFAULT 2,
   cutoff_minute INTEGER DEFAULT 0,
   daily_code TEXT,
-  daily_code_time TIMESTAMPTZ,
-  earliest_time TEXT
+  daily_code_time TIMESTAMPTZ
 );
 
 -- 2. 管理员账号表
@@ -92,4 +91,3 @@ INSERT INTO store (store_id, name) VALUES
 -- 为已有数据库添加 provider_id 列（如列已存在则忽略）
 ALTER TABLE roster ADD COLUMN IF NOT EXISTS provider_id BIGINT;
 ALTER TABLE roster ADD COLUMN IF NOT EXISTS device_id TEXT;
-ALTER TABLE store ADD COLUMN IF NOT EXISTS earliest_time TEXT;

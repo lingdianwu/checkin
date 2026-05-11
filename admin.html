@@ -110,16 +110,7 @@
           <select id="newStoreCutoffM" style="width:70px;padding:10px 8px;font-size:14px;border:1.5px solid #e2e8f0;border-radius:8px;outline:none;background:#fff">
             <option value="0" selected>00</option><option value="30">30</option>
           </select>
-          <span style="font-size:12px;color:#999">截止</span>
-          <span style="font-size:14px;color:#666;margin-left:8px">最早</span>
-          <select id="newStoreEarliestH" style="width:70px;padding:10px 8px;font-size:14px;border:1.5px solid #e2e8f0;border-radius:8px;outline:none;background:#fff">
-            <option value="">不限</option><option value="06">06</option><option value="07">07</option><option value="08">08</option><option value="09" selected>09</option><option value="10">10</option><option value="11">11</option><option value="12">12</option>
-          </select>
-          <span style="font-size:14px;color:#666">:</span>
-          <select id="newStoreEarliestM" style="width:70px;padding:10px 8px;font-size:14px;border:1.5px solid #e2e8f0;border-radius:8px;outline:none;background:#fff">
-            <option value="00" selected>00</option><option value="30">30</option>
-          </select>
-          <span style="font-size:12px;color:#999">最早打卡</span>
+          <span style="font-size:12px;color:#999">截止时间</span>
           <button class="btn-primary" onclick="addStore()">添加门店</button>
         </div>
         <p style="font-size:12px;color:#999;margin:-8px 0 12px">
@@ -663,16 +654,12 @@
       db.from('store').select('*').eq('store_id', sid).single()
         .then(function(r) {
           if (r.data) { alert('该门店ID已存在'); return Promise.reject('dup'); }
-          var earliestH = document.getElementById('newStoreEarliestH').value;
-          var earliestM = document.getElementById('newStoreEarliestM').value;
-          var earliestTime = earliestH ? earliestH + ':' + earliestM : null;
           return db.from('store').insert({
             store_id: sid, name: sname,
             lat: isNaN(lat) ? null : lat,
             lng: isNaN(lng) ? null : lng,
             cutoff_hour: parseInt(document.getElementById('newStoreCutoffH').value),
-            cutoff_minute: parseInt(document.getElementById('newStoreCutoffM').value),
-            earliest_time: earliestTime
+            cutoff_minute: parseInt(document.getElementById('newStoreCutoffM').value)
           });
         }).then(function(res) {
           if (res && res.error) throw res.error;
@@ -691,12 +678,10 @@
         return;
       }
       document.getElementById('storeListContainer').innerHTML =
-        '<table class="store-table"><thead><tr><th>门店ID</th><th>名称</th><th>打卡截止</th><th>最早打卡</th><th>今日码</th><th>操作</th></tr></thead><tbody>' +
+        '<table class="store-table"><thead><tr><th>门店ID</th><th>名称</th><th>打卡截止</th><th>今日码</th><th>操作</th></tr></thead><tbody>' +
         stores.map(function(s) {
           var ch = s.cutoff_hour != null ? ('0'+s.cutoff_hour).slice(-2) : '02';
           var cm = s.cutoff_minute != null ? ('0'+s.cutoff_minute).slice(-2) : '00';
-          var eh = s.earliest_time ? s.earliest_time.split(':')[0] : '';
-          var em = s.earliest_time ? s.earliest_time.split(':')[1] : '';
           return '<tr>' +
             '<td>' + escHtml(s.store_id) + '</td>' +
             '<td>' + escHtml(s.name) + '</td>' +
@@ -706,15 +691,6 @@
             '</select> : ' +
             '<select id="scm-' + s.store_id + '" onchange="saveStoreCutoff(\'' + s.store_id + '\')" style="padding:4px 6px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none;background:#fff">' +
             ['00','30'].map(function(m) { return '<option value="' + m + '"' + (parseInt(m) === (s.cutoff_minute||0) ? ' selected' : '') + '>' + m + '</option>'; }).join('') +
-            '</select></td>' +
-            '<td>' +
-            '<select id="seh-' + s.store_id + '" onchange="saveStoreCutoff(\'' + s.store_id + '\')" style="padding:4px 6px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none;background:#fff">' +
-            '<option value=""' + (!eh ? ' selected' : '') + '>不限</option>' +
-            ['06','07','08','09','10','11','12'].map(function(h) { return '<option value="' + h + '"' + (h === eh ? ' selected' : '') + '>' + h + '</option>'; }).join('') +
-            '</select> : ' +
-            '<select id="sem-' + s.store_id + '" onchange="saveStoreCutoff(\'' + s.store_id + '\')" style="padding:4px 6px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none;background:#fff">' +
-            '<option value="00"' + (em === '00' ? ' selected' : '') + '>00</option>' +
-            '<option value="30"' + (em === '30' ? ' selected' : '') + '>30</option>' +
             '</select></td>' +
             '<td>' + (s.daily_code || '--') + '</td>' +
             '<td><button class="btn-danger" onclick="delStore(\'' + s.store_id + '\')">删除</button></td>' +
@@ -772,10 +748,7 @@
     window.saveStoreCutoff = function(sid) {
       var h = parseInt(document.getElementById('sch-' + sid).value);
       var m = parseInt(document.getElementById('scm-' + sid).value);
-      var eh = document.getElementById('seh-' + sid).value;
-      var em = document.getElementById('sem-' + sid).value;
-      var earliest = eh ? eh + ':' + em : null;
-      db.from('store').update({ cutoff_hour: h, cutoff_minute: m, earliest_time: earliest }).eq('store_id', sid)
+      db.from('store').update({ cutoff_hour: h, cutoff_minute: m }).eq('store_id', sid)
         .then(function(r) { if (r.error) throw r.error; })
         .catch(function(e) { alert('保存失败: ' + (e.message || '网络错误')); });
     };
