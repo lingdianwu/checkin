@@ -175,7 +175,6 @@
       <div class="roster-section">
         <h3>添加第三方</h3>
         <div class="roster-add">
-          <select id="providerStore"><option value="">选择门店</option></select>
           <input type="text" id="providerName" placeholder="第三方名称" style="min-width:120px">
           <input type="number" id="providerRate" placeholder="服务费(元/小时)" style="min-width:130px" step="0.01" min="0">
           <button class="btn-primary" onclick="addProvider()">添加</button>
@@ -305,7 +304,6 @@
           document.getElementById('rosterStore').innerHTML = '<option value="">选择门店</option>' + opts;
           document.getElementById('batchStore').innerHTML = '<option value="">选择门店</option>' + opts;
           document.getElementById('adminStore').innerHTML = '<option value="">选择门店</option>' + opts;
-          document.getElementById('providerStore').innerHTML = '<option value="">选择门店</option>' + opts;
           if (gAdminStoreId) {
             document.getElementById('filterStore').value = gAdminStoreId;
             document.getElementById('filterStore').disabled = true;
@@ -313,8 +311,6 @@
             document.getElementById('rosterStore').disabled = true;
             document.getElementById('batchStore').value = gAdminStoreId;
             document.getElementById('batchStore').disabled = true;
-            document.getElementById('providerStore').value = gAdminStoreId;
-            document.getElementById('providerStore').disabled = true;
           }
           loadProviders().then(function() {
             loadRosterList().then(function() { loadRecords(); });
@@ -562,7 +558,7 @@
             list.map(function(i) {
               var mc = (i.max_checkins != null) ? i.max_checkins : 3;
               var provOpts = '<option value="">无</option>' +
-                (window._providers || []).filter(function(p) { return p.store_id === i.store_id; }).map(function(p) {
+                (window._providers || []).map(function(p) {
                   return '<option value="' + p.id + '"' + (i.provider_id === p.id ? ' selected' : '') + '>' + escHtml(p.name) + '</option>';
                 }).join('');
               return '<tr>' +
@@ -580,9 +576,8 @@
 
     // ====== 第三方管理 ======
     function loadProviders() {
-      var query = db.from('service_provider').select('*').order('name');
-      if (gAdminStoreId) query = query.eq('store_id', gAdminStoreId);
-      return query.then(function(r) {
+      return db.from('service_provider').select('*').order('name')
+        .then(function(r) {
         if (r.error) throw r.error;
         window._providers = r.data || [];
         var opts = window._providers.map(function(p) {
@@ -594,13 +589,11 @@
     }
 
     window.addProvider = function() {
-      var sid = document.getElementById('providerStore').value;
       var name = document.getElementById('providerName').value.trim();
       var rate = parseFloat(document.getElementById('providerRate').value);
-      if (!sid) { alert('请选择门店'); return; }
       if (!name) { alert('请输入第三方名称'); return; }
       if (isNaN(rate) || rate < 0) { alert('请输入有效的服务费（元/小时）'); return; }
-      db.from('service_provider').insert({ store_id: sid, name: name, hourly_rate: rate })
+      db.from('service_provider').insert({ name: name, hourly_rate: rate })
         .then(function(res) {
           if (res.error) throw res.error;
           document.getElementById('providerName').value = '';
@@ -616,10 +609,9 @@
         return;
       }
       document.getElementById('providerListContainer').innerHTML =
-        '<table class="roster-table"><thead><tr><th>门店</th><th>名称</th><th>服务费(元/小时)</th><th>操作</th></tr></thead><tbody>' +
+        '<table class="roster-table"><thead><tr><th>名称</th><th>服务费(元/小时)</th><th>操作</th></tr></thead><tbody>' +
         provs.map(function(p) {
           return '<tr>' +
-            '<td>' + escHtml(gSN(p.store_id)) + '</td>' +
             '<td><input type="text" id="pname-' + p.id + '" value="' + escHtml(p.name) + '" style="width:140px;padding:4px 8px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none"></td>' +
             '<td><input type="number" id="prate-' + p.id + '" value="' + p.hourly_rate + '" step="0.01" min="0" style="width:90px;padding:4px 8px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none"></td>' +
             '<td><button class="btn-success" onclick="saveProvider(\'' + p.id + '\')" style="margin-right:4px">保存</button>' +
@@ -762,8 +754,7 @@
       Promise.all([
         db.from('store').delete().eq('store_id', sid),
         db.from('roster').delete().eq('store_id', sid),
-        db.from('check_record').delete().eq('store_id', sid),
-        db.from('service_provider').delete().eq('store_id', sid)
+        db.from('check_record').delete().eq('store_id', sid)
       ]).then(function() { loadStores(); })
         .catch(function(e) { alert('删除失败: ' + (e.message || '网络错误')); });
     };

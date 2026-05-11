@@ -45,10 +45,9 @@ CREATE TABLE IF NOT EXISTS check_record (
   date TEXT NOT NULL
 );
 
--- 5. 第三方服务商表
+-- 5. 第三方服务商表（全局，不绑定门店）
 CREATE TABLE IF NOT EXISTS service_provider (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  store_id TEXT NOT NULL,
   name TEXT NOT NULL,
   hourly_rate FLOAT NOT NULL DEFAULT 0
 );
