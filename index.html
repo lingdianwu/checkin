@@ -8,15 +8,6 @@
 </head>
 <body class="checkin-page">
 
-  <!-- 微信浏览器引导卡片 -->
-  <div class="wechat-guide" id="wechatTip" style="display:none">
-    <div class="wechat-guide-icon">📋</div>
-    <div class="wechat-guide-title">微信内无法直接打卡</div>
-    <div class="wechat-guide-desc">请点击下方按钮复制链接，在系统浏览器中打开</div>
-    <button class="wechat-guide-btn" onclick="copyLink()">一键复制打卡链接</button>
-    <div class="wechat-guide-extra">或点击右上角「···」→ 在浏览器中打开</div>
-  </div>
-
   <div class="store-header">
     <div class="icon">📍</div>
     <h1 id="storeName">加载中...</h1>
@@ -96,10 +87,6 @@
     init();
 
     function init() {
-      // 检测微信内置浏览器，显示引导提示
-      if (/micromessenger/i.test(navigator.userAgent)) {
-        document.getElementById('wechatTip').style.display = '';
-      }
       Promise.all([loadStore(), loadAppConfig()]).then(function() {
         // 验证动态码（自动每日变化）
         if (dailySecret && urlCode) {
@@ -451,26 +438,6 @@
       if (!p || p.length < 7) return p;
       return p.substring(0, 3) + '****' + p.substring(7);
     }
-    window.copyLink = function() {
-      var url = location.href;
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(url).then(function() {
-          toast('链接已复制，请在浏览器中粘贴打开');
-        }).catch(function() {
-          fallbackCopy(url);
-        });
-      } else {
-        fallbackCopy(url);
-      }
-    };
-    function fallbackCopy(text) {
-      var ta = document.createElement('textarea');
-      ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
-      document.body.appendChild(ta);
-      ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
-      toast('链接已复制，请在浏览器中粘贴打开');
-    }
-
     window.startScan = function() {
       var overlay = document.getElementById('scannerOverlay');
       overlay.style.display = '';
