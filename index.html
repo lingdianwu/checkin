@@ -265,7 +265,7 @@
             renderNoneStatus(rec);
           } else {
             currentRecord = rec;
-            // 扫码进来的且有在岗记录 → 显示确认签退按钮（不自动）
+            // urlCode 存在 = 刚扫码进来，直接签退；否则需重新扫码
             renderCheckedIn(rec, !!urlCode);
           }
         }).catch(function() {
@@ -376,7 +376,11 @@
           if (_ref4 === 'limit') return;
           if (_ref4.error) throw _ref4.error;
           currentRecord = _ref4.data;
-          sessionStorage.setItem('scanned-in', '1');
+          // 签到后清除 URL 中的 code，防止刷新误认为刚扫码
+          var u = new URL(location.href);
+          u.searchParams.delete('code');
+          history.replaceState(null, '', u.toString());
+          urlCode = '';
           renderCheckInDone(_ref4.data);
           toast('签到成功，请重新扫码进行签退');
         }).catch(function(err) {
@@ -392,7 +396,6 @@
         .then(function(_ref5) {
           if (_ref5.error) throw _ref5.error;
           currentRecord = _ref5.data;
-          sessionStorage.removeItem('scanned-in');
           renderCheckOutDone(_ref5.data);
           toast('签退成功，请重新扫码进行下次签到');
         }).catch(function(err) {
@@ -402,7 +405,6 @@
 
     window.clearIdentity = function() {
       localStorage.removeItem(saveKey());
-      sessionStorage.removeItem('scanned-in');
       currentName = null;
       currentPhone = null;
       currentRecord = null;
