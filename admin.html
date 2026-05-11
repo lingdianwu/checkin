@@ -788,6 +788,13 @@
       var co = new Date(y, mo, d, h, m, 0);
       if (isNaN(co.getTime())) { alert('日期无效'); return; }
       if (co <= ci) { alert('离岗时间（' + fmtDateTime(co) + '）不能早于到岗时间（' + fmtDateTime(ci) + '）'); return; }
+      // 最晚离岗时间 = 到岗日期 + 1天 + 门店截止时间
+      var nextDay = new Date(ci.getFullYear(), ci.getMonth(), ci.getDate() + 1);
+      var store = (window._stores || []).filter(function(s) { return s.store_id === gAdminStoreId; })[0];
+      var cutoffH = (store && store.cutoff_hour != null) ? store.cutoff_hour : 2;
+      var cutoffM = (store && store.cutoff_minute != null) ? store.cutoff_minute : 0;
+      var maxCo = new Date(nextDay.getFullYear(), nextDay.getMonth(), nextDay.getDate(), cutoffH, cutoffM, 0);
+      if (co > maxCo) { alert('离岗时间最晚为次日 ' + ('0'+cutoffH).slice(-2) + ':' + ('0'+cutoffM).slice(-2) + '（门店截止时间）'); return; }
       db.from('check_record').update({ check_out: co.toISOString() }).eq('id', id)
         .then(function(r) { if (r.error) throw r.error; loadRecords(); })
         .catch(function(e) { alert('设置失败: ' + (e.message || '网络错误')); });

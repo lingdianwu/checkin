@@ -296,7 +296,7 @@
           var now = new Date();
           if (rec.date === yesterday && (now.getHours() > cutoffHour || (now.getHours() === cutoffHour && now.getMinutes() >= cutoffMinute))) {
             currentRecord = null;
-            renderNoneStatus(rec);
+            renderNoneStatus(rec, true);
           } else {
             currentRecord = rec;
             // urlCode 存在 = 刚扫码进来，直接签退；否则需重新扫码
@@ -308,17 +308,21 @@
         });
     }
 
-    function renderNoneStatus(lastRec) {
+    function renderNoneStatus(lastRec, expired) {
       document.getElementById('statusBadge').textContent = '未打卡';
       document.getElementById('statusBadge').className = 'status-badge none';
       var info = document.getElementById('timeInfo');
       if (lastRec) {
         var ci = new Date(lastRec.check_in);
         var co = lastRec.check_out ? new Date(lastRec.check_out) : null;
-        info.innerHTML =
-          '<div class="time-row"><span class="label">上次到岗</span><span class="value">' + fmtTime(ci) + '</span></div>' +
+        var html = '<div class="time-row"><span class="label">上次到岗</span><span class="value">' + fmtTime(ci) + '</span></div>' +
           '<div class="time-row"><span class="label">上次离岗</span><span class="value">' + fmtTime(co) + '</span></div>' +
           '<div class="hours-highlight">上次在岗 ' + calcHours(ci, co) + '</div>';
+        if (expired && !co) {
+          html += '<div style="color:#ef4440;font-weight:600;margin-top:10px;padding:10px 14px;background:#fff5f5;border-radius:8px;font-size:14px">' +
+            '昨天的打卡未签退，请联系管理员确认离岗时间</div>';
+        }
+        info.innerHTML = html;
       } else {
         info.innerHTML = '<div style="color:#999;padding:10px">今天还没有打卡记录</div>';
       }
