@@ -109,6 +109,7 @@
         if (savedPhone && phoneToName[savedPhone]) {
           currentPhone = savedPhone;
           currentName = phoneToName[savedPhone];
+          bindDeviceIfNew(savedPhone);
           verifyLocation().then(function() { showStatus(); });
         } else {
           if (savedPhone) localStorage.removeItem(saveKey());
@@ -235,6 +236,17 @@
       return id;
     }
 
+    function bindDeviceIfNew(phone) {
+      var boundDevice = phoneToDevice[phone];
+      var curDevice = getDeviceId();
+      if (boundDevice && boundDevice !== curDevice) return false;
+      if (!boundDevice) {
+        db.from('roster').update({ device_id: curDevice }).eq('store_id', storeId).eq('phone', phone)
+          .then(function() { phoneToDevice[phone] = curDevice; });
+      }
+      return true;
+    }
+
     window.doPhoneLogin = function() {
       var phone = document.getElementById('phoneInput').value.trim();
       if (!phone) return;
@@ -249,19 +261,7 @@
         document.getElementById('phoneError').style.display = '';
         return;
       }
-      // 设备绑定检查
-      var boundDevice = phoneToDevice[phone];
-      var curDevice = getDeviceId();
-      if (boundDevice && boundDevice !== curDevice) {
-        document.getElementById('phoneError').textContent = '该手机号已在其他设备绑定，请联系管理员解绑';
-        document.getElementById('phoneError').style.display = '';
-        return;
-      }
-      // 首次绑定
-      if (!boundDevice) {
-        db.from('roster').update({ device_id: curDevice }).eq('store_id', storeId).eq('phone', phone)
-          .then(function() { phoneToDevice[phone] = curDevice; });
-      }
+      if (!bindDeviceIfNew(phone)) return;
       currentPhone = phone;
       currentName = name;
       localStorage.setItem(saveKey(), phone);
