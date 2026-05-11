@@ -731,7 +731,7 @@
         return;
       }
       document.getElementById('storeListContainer').innerHTML =
-        '<table class="store-table"><thead><tr><th>门店ID</th><th>名称</th><th>打卡截止</th><th>今日码</th><th>操作</th></tr></thead><tbody>' +
+        '<table class="store-table"><thead><tr><th>门店ID</th><th>名称</th><th>打卡截止</th><th>操作</th></tr></thead><tbody>' +
         stores.map(function(s) {
           var ch = s.cutoff_hour != null ? ('0'+s.cutoff_hour).slice(-2) : '02';
           var cm = s.cutoff_minute != null ? ('0'+s.cutoff_minute).slice(-2) : '00';
@@ -745,7 +745,6 @@
             '<select id="scm-' + s.store_id + '" onchange="saveStoreCutoff(\'' + s.store_id + '\')" style="padding:4px 6px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none;background:#fff">' +
             ['00','30'].map(function(m) { return '<option value="' + m + '"' + (parseInt(m) === (s.cutoff_minute||0) ? ' selected' : '') + '>' + m + '</option>'; }).join('') +
             '</select></td>' +
-            '<td>' + (s.daily_code || '--') + '</td>' +
             '<td><button class="btn-danger" onclick="delStore(\'' + s.store_id + '\')">删除</button></td>' +
             '</tr>';
         }).join('') + '</tbody></table>';
