@@ -453,25 +453,30 @@
       var overlay = document.getElementById('scannerOverlay');
       overlay.style.display = '';
       var reader = document.getElementById('qrReader');
-      reader.innerHTML = '';
-      window._html5QrCode = new Html5Qrcode('qrReader');
-      window._html5QrCode.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        function(decodedText) {
-          // 扫到码后跳转
+      reader.innerHTML = '<div style="color:#999;text-align:center;padding:40px;font-size:14px">正在启动摄像头...</div>';
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        reader.innerHTML = '<div style="color:#f44336;text-align:center;padding:40px;font-size:14px">当前浏览器不支持摄像头<br><br>请用系统浏览器（Chrome/Safari）打开</div>';
+        return;
+      }
+      setTimeout(function() {
+        window._html5QrCode = new Html5Qrcode('qrReader');
+        window._html5QrCode.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: { width: 250, height: 250 } },
+          function(decodedText) {
+            stopScan();
+            if (/index\.html/.test(decodedText)) {
+              window.location.href = decodedText;
+            } else {
+              toast('请扫描门店打卡二维码', 'error');
+            }
+          },
+          function() {}
+        ).catch(function(err) {
           stopScan();
-          if (/index\.html/.test(decodedText)) {
-            window.location.href = decodedText;
-          } else {
-            toast('请扫描门店打卡二维码', 'error');
-          }
-        },
-        function() {} // ignore errors
-      ).catch(function(err) {
-        stopScan();
-        toast('无法打开相机: ' + (err.message || '请检查权限'), 'error');
-      });
+          toast('无法打开相机: ' + (err.message || '请检查权限'), 'error');
+        });
+      }, 200);
     };
 
     window.stopScan = function() {
