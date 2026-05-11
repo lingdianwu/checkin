@@ -1060,8 +1060,7 @@
           var qrUrl = baseUrl + '?store=' + s.store_id + (code ? '&code=' + code : '');
           return '<div class="qr-card"><h4>' + escHtml(s.name) + '</h4>' +
             '<div id="qr-' + s.store_id + '"></div>' +
-            '<div class="qr-hint">今日码: ' + (code || '<span style="color:#e65100">请先设置密钥</span>') + '</div>' +
-            '<button class="btn-outline" onclick="downloadQR(\'qr-' + s.store_id + '\',\'' + s.store_id + '.png\',\'' + escHtml(s.name).replace(/'/g, "\\'") + '\',\'' + (code ? '今日码: ' + code : '') + '\')" style="margin-top:8px;font-size:12px;padding:6px 14px">下载二维码</button>' +
+            '<button class="btn-outline" onclick="downloadQR(\'qr-' + s.store_id + '\',\'' + s.store_id + '.png\',\'' + escHtml(s.name).replace(/'/g, "\\'") + '\')" style="margin-top:8px;font-size:12px;padding:6px 14px">下载二维码</button>' +
             '</div>';
         }).join('');
         document.getElementById('qrContainer').innerHTML = html;
