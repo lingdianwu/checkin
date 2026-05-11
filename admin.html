@@ -440,7 +440,8 @@
             var roundedHrs = Math.floor(mins / 30) * 30 / 60;
             feeStr = (roundedHrs * rate).toFixed(2) + '元';
           }
-          var actionHtml = '<button class="btn-danger" onclick="deleteRecord(\'' + r.id + '\')">删除</button>';
+          var actionHtml = '<button class="btn-danger" onclick="deleteRecord(\'' + r.id + '\')">删除</button>' +
+            ' <button class="btn-success" onclick="setCheckIn(\'' + r.id + '\',\'' + r.check_in + '\'' + (r.check_out ? ',\'' + r.check_out + '\'' : '') + ')">编辑到岗</button>';
           if (needsCheckout) {
             actionHtml += ' <button class="btn-success" onclick="setCheckOut(\'' + r.id + '\',\'' + r.check_in + '\')">编辑离岗</button>';
           }
@@ -795,6 +796,29 @@
       return d.getFullYear() + '-' + ('0'+(d.getMonth()+1)).slice(-2) + '-' + ('0'+d.getDate()).slice(-2) +
         ' ' + ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2);
     }
+    window.setCheckIn = function(id, checkIn, checkOutStr) {
+      var ci = new Date(checkIn);
+      var defVal = fmtDateTime(ci);
+      var input = prompt('请输入新的到岗时间（YYYY-MM-DD HH:MM）', defVal);
+      if (!input) return;
+      var parts = input.trim().split(/[\sT]+/);
+      var datePart = parts[0], timePart = parts[1];
+      if (!datePart || !timePart) { alert('格式：YYYY-MM-DD HH:MM，如 ' + defVal); return; }
+      var dateParts = datePart.split('-');
+      var timeParts = timePart.split(':');
+      var y = parseInt(dateParts[0], 10), mo = parseInt(dateParts[1], 10) - 1, d = parseInt(dateParts[2], 10);
+      var h = parseInt(timeParts[0], 10), m = parseInt(timeParts[1], 10);
+      if (isNaN(y) || isNaN(mo) || isNaN(d) || isNaN(h) || isNaN(m)) { alert('格式不正确'); return; }
+      var newCi = new Date(y, mo, d, h, m, 0);
+      if (isNaN(newCi.getTime())) { alert('日期无效'); return; }
+      if (checkOutStr) {
+        var co = new Date(checkOutStr);
+        if (newCi >= co) { alert('到岗时间（' + fmtDateTime(newCi) + '）不能晚于离岗时间（' + fmtDateTime(co) + '）'); return; }
+      }
+      db.from('check_record').update({ check_in: newCi.toISOString() }).eq('id', id)
+        .then(function(r) { if (r.error) throw r.error; loadRecords(); })
+        .catch(function(e) { alert('设置失败: ' + (e.message || '网络错误')); });
+    };
     window.savePhone = function(id) {
       var storeId = document.getElementById('store-' + id).value;
       var name = document.getElementById('name-' + id).value.trim();
