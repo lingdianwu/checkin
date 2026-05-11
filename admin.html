@@ -1061,7 +1061,7 @@
           return '<div class="qr-card"><h4>' + escHtml(s.name) + '</h4>' +
             '<div id="qr-' + s.store_id + '"></div>' +
             '<div class="qr-hint">今日码: ' + (code || '<span style="color:#e65100">请先设置密钥</span>') + '</div>' +
-            '<button class="btn-outline" onclick="downloadQR(\'qr-' + s.store_id + '\',\'' + s.store_id + '.png\',\'' + escHtml(s.name).replace(/'/g, "\\'") + '\')" style="margin-top:8px;font-size:12px;padding:6px 14px">下载二维码</button>' +
+            '<button class="btn-outline" onclick="downloadQR(\'qr-' + s.store_id + '\',\'' + s.store_id + '.png\',\'' + escHtml(s.name).replace(/'/g, "\\'") + '\',\'' + (code ? '今日码: ' + code : '') + '\')" style="margin-top:8px;font-size:12px;padding:6px 14px">下载二维码</button>' +
             '</div>';
         }).join('');
         document.getElementById('qrContainer').innerHTML = html;
@@ -1105,46 +1105,70 @@
     function gPN(pid) { var p=(window._providers||[]).filter(function(x){return x.id===pid})[0]; return p?p.name:'--'; }
     function gPR(pid) { var p=(window._providers||[]).filter(function(x){return x.id===pid})[0]; return p?p.hourly_rate:0; }
     function escHtml(s) { if (!s) return ''; return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-    window.downloadQR = function(wrapperId, filename, title) {
+    window.downloadQR = function(wrapperId, filename, title, subtitle) {
       var el = document.getElementById(wrapperId);
       if (!el) return;
       var srcCanvas = el.querySelector('canvas');
       var srcImg = el.querySelector('img');
-      var srcW = 0, srcH = 0;
+      if (!srcCanvas && !srcImg) return;
+      var srcW = srcCanvas ? srcCanvas.width : srcImg.naturalWidth;
+      var srcH = srcCanvas ? srcCanvas.height : srcImg.naturalHeight;
+      var hasTitle = !!title;
+      var hasSub = !!subtitle;
+      var topH = hasTitle ? 50 : 0;
+      var bottomH = hasSub ? 32 : 0;
+      var padding = 28;
+      var cardW = srcW + padding * 2;
+      var cardH = topH + srcH + bottomH + padding * 2;
       var resultCanvas = document.createElement('canvas');
       var ctx = resultCanvas.getContext('2d');
-      var titleH = title ? 56 : 0;
+      resultCanvas.width = cardW;
+      resultCanvas.height = cardH;
+      // 白色卡片背景
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, cardW, cardH);
+      // 圆角边框效果
+      ctx.strokeStyle = '#e8ecf1';
+      ctx.lineWidth = 1;
+      roundRect(ctx, 2, 2, cardW - 4, cardH - 4, 14);
+      ctx.stroke();
+      // 标题
+      if (hasTitle) {
+        ctx.fillStyle = '#222';
+        ctx.font = 'bold 18px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(title, cardW / 2, topH + 12);
+      }
+      // 二维码
       if (srcCanvas) {
-        srcW = srcCanvas.width; srcH = srcCanvas.height;
-        resultCanvas.width = srcW;
-        resultCanvas.height = srcH + titleH + 20;
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(0, 0, resultCanvas.width, resultCanvas.height);
-        if (title) {
-          ctx.fillStyle = '#333';
-          ctx.font = 'bold 20px sans-serif';
-          ctx.textAlign = 'center';
-          ctx.fillText(title, srcW / 2, 36);
-        }
-        ctx.drawImage(srcCanvas, 0, titleH, srcW, srcH);
-      } else if (srcImg) {
-        srcW = srcImg.naturalWidth; srcH = srcImg.naturalHeight;
-        resultCanvas.width = srcW;
-        resultCanvas.height = srcH + titleH + 20;
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(0, 0, resultCanvas.width, resultCanvas.height);
-        if (title) {
-          ctx.fillStyle = '#333';
-          ctx.font = 'bold 20px sans-serif';
-          ctx.textAlign = 'center';
-          ctx.fillText(title, srcW / 2, 36);
-        }
-        ctx.drawImage(srcImg, 0, titleH, srcW, srcH);
-      } else { return; }
+        ctx.drawImage(srcCanvas, padding, topH, srcW, srcH);
+      } else {
+        ctx.drawImage(srcImg, padding, topH, srcW, srcH);
+      }
+      // 副标题（今日码/链接）
+      if (hasSub) {
+        ctx.fillStyle = '#999';
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(subtitle, cardW / 2, topH + srcH + bottomH + 4);
+      }
       var a = document.createElement('a');
       a.href = resultCanvas.toDataURL('image/png');
       a.download = filename; a.click();
     };
+    function roundRect(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.arcTo(x + w, y, x + w, y + r, r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+      ctx.lineTo(x + r, y + h);
+      ctx.arcTo(x, y + h, x, y + h - r, r);
+      ctx.lineTo(x, y + r);
+      ctx.arcTo(x, y, x + r, y, r);
+      ctx.closePath();
+    }
   })();
   </script>
 </body>
