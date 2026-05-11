@@ -110,7 +110,16 @@
           <select id="newStoreCutoffM" style="width:70px;padding:10px 8px;font-size:14px;border:1.5px solid #e2e8f0;border-radius:8px;outline:none;background:#fff">
             <option value="0" selected>00</option><option value="30">30</option>
           </select>
-          <span style="font-size:12px;color:#999">截止时间</span>
+          <span style="font-size:12px;color:#999">截止</span>
+          <span style="font-size:14px;color:#666;margin-left:8px">最早</span>
+          <select id="newStoreEarliestH" style="width:70px;padding:10px 8px;font-size:14px;border:1.5px solid #e2e8f0;border-radius:8px;outline:none;background:#fff">
+            <option value="">不限</option><option value="06">06</option><option value="07">07</option><option value="08">08</option><option value="09" selected>09</option><option value="10">10</option><option value="11">11</option><option value="12">12</option>
+          </select>
+          <span style="font-size:14px;color:#666">:</span>
+          <select id="newStoreEarliestM" style="width:70px;padding:10px 8px;font-size:14px;border:1.5px solid #e2e8f0;border-radius:8px;outline:none;background:#fff">
+            <option value="00" selected>00</option><option value="30">30</option>
+          </select>
+          <span style="font-size:12px;color:#999">最早打卡</span>
           <button class="btn-primary" onclick="addStore()">添加门店</button>
         </div>
         <p style="font-size:12px;color:#999;margin:-8px 0 12px">
@@ -358,8 +367,9 @@
           var fee = '';
           if (co && pid) {
             var rate = gPR(pid);
-            var hrs = (co.getTime() - ci.getTime()) / 3600000;
-            fee = (hrs * rate).toFixed(2);
+            var mins = (co.getTime() - ci.getTime()) / 60000;
+            var roundedHrs = Math.floor(mins / 30) * 30 / 60;
+            fee = (roundedHrs * rate).toFixed(2);
           }
           return [
             rec.name, gSN(rec.store_id), rec.date,
@@ -394,7 +404,7 @@
           var re = window._rosterMap[r.store_id + '|' + r.name];
           if (re && re.provider_id) {
             var rate = gPR(re.provider_id);
-            todayTotalFee += (mins / 60) * rate;
+            todayTotalFee += (Math.floor(mins / 30) * 30 / 60) * rate;
           }
         }
       });
@@ -435,8 +445,9 @@
           var feeStr = '--';
           if (co && pid) {
             var rate = gPR(pid);
-            var hrs = (co.getTime() - ci.getTime()) / 3600000;
-            feeStr = (hrs * rate).toFixed(2) + '元';
+            var mins = (co.getTime() - ci.getTime()) / 60000;
+            var roundedHrs = Math.floor(mins / 30) * 30 / 60;
+            feeStr = (roundedHrs * rate).toFixed(2) + '元';
           }
           var actionHtml = '<button class="btn-danger" onclick="deleteRecord(\'' + r.id + '\')">删除</button>';
           if (needsCheckout) {
@@ -652,12 +663,16 @@
       db.from('store').select('*').eq('store_id', sid).single()
         .then(function(r) {
           if (r.data) { alert('该门店ID已存在'); return Promise.reject('dup'); }
+          var earliestH = document.getElementById('newStoreEarliestH').value;
+          var earliestM = document.getElementById('newStoreEarliestM').value;
+          var earliestTime = earliestH ? earliestH + ':' + earliestM : null;
           return db.from('store').insert({
             store_id: sid, name: sname,
             lat: isNaN(lat) ? null : lat,
             lng: isNaN(lng) ? null : lng,
             cutoff_hour: parseInt(document.getElementById('newStoreCutoffH').value),
-            cutoff_minute: parseInt(document.getElementById('newStoreCutoffM').value)
+            cutoff_minute: parseInt(document.getElementById('newStoreCutoffM').value),
+            earliest_time: earliestTime
           });
         }).then(function(res) {
           if (res && res.error) throw res.error;
@@ -676,21 +691,30 @@
         return;
       }
       document.getElementById('storeListContainer').innerHTML =
-        '<table class="store-table"><thead><tr><th>门店ID</th><th>名称</th><th>坐标</th><th>打卡截止</th><th>今日码</th><th>操作</th></tr></thead><tbody>' +
+        '<table class="store-table"><thead><tr><th>门店ID</th><th>名称</th><th>打卡截止</th><th>最早打卡</th><th>今日码</th><th>操作</th></tr></thead><tbody>' +
         stores.map(function(s) {
-          var coord = (s.lat && s.lng) ? s.lat.toFixed(4) + ', ' + s.lng.toFixed(4) : '未设置';
           var ch = s.cutoff_hour != null ? ('0'+s.cutoff_hour).slice(-2) : '02';
           var cm = s.cutoff_minute != null ? ('0'+s.cutoff_minute).slice(-2) : '00';
+          var eh = s.earliest_time ? s.earliest_time.split(':')[0] : '';
+          var em = s.earliest_time ? s.earliest_time.split(':')[1] : '';
           return '<tr>' +
             '<td>' + escHtml(s.store_id) + '</td>' +
             '<td>' + escHtml(s.name) + '</td>' +
-            '<td>' + coord + '</td>' +
             '<td>' +
             '<select id="sch-' + s.store_id + '" onchange="saveStoreCutoff(\'' + s.store_id + '\')" style="padding:4px 6px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none;background:#fff">' +
             [0,1,2,3,4,5,6,7,8].map(function(h) { return '<option value="' + h + '"' + (h === (s.cutoff_hour||2) ? ' selected' : '') + '>' + ('0'+h).slice(-2) + '</option>'; }).join('') +
             '</select> : ' +
             '<select id="scm-' + s.store_id + '" onchange="saveStoreCutoff(\'' + s.store_id + '\')" style="padding:4px 6px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none;background:#fff">' +
             ['00','30'].map(function(m) { return '<option value="' + m + '"' + (parseInt(m) === (s.cutoff_minute||0) ? ' selected' : '') + '>' + m + '</option>'; }).join('') +
+            '</select></td>' +
+            '<td>' +
+            '<select id="seh-' + s.store_id + '" onchange="saveStoreCutoff(\'' + s.store_id + '\')" style="padding:4px 6px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none;background:#fff">' +
+            '<option value=""' + (!eh ? ' selected' : '') + '>不限</option>' +
+            ['06','07','08','09','10','11','12'].map(function(h) { return '<option value="' + h + '"' + (h === eh ? ' selected' : '') + '>' + h + '</option>'; }).join('') +
+            '</select> : ' +
+            '<select id="sem-' + s.store_id + '" onchange="saveStoreCutoff(\'' + s.store_id + '\')" style="padding:4px 6px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none;background:#fff">' +
+            '<option value="00"' + (em === '00' ? ' selected' : '') + '>00</option>' +
+            '<option value="30"' + (em === '30' ? ' selected' : '') + '>30</option>' +
             '</select></td>' +
             '<td>' + (s.daily_code || '--') + '</td>' +
             '<td><button class="btn-danger" onclick="delStore(\'' + s.store_id + '\')">删除</button></td>' +
@@ -748,7 +772,10 @@
     window.saveStoreCutoff = function(sid) {
       var h = parseInt(document.getElementById('sch-' + sid).value);
       var m = parseInt(document.getElementById('scm-' + sid).value);
-      db.from('store').update({ cutoff_hour: h, cutoff_minute: m }).eq('store_id', sid)
+      var eh = document.getElementById('seh-' + sid).value;
+      var em = document.getElementById('sem-' + sid).value;
+      var earliest = eh ? eh + ':' + em : null;
+      db.from('store').update({ cutoff_hour: h, cutoff_minute: m, earliest_time: earliest }).eq('store_id', sid)
         .then(function(r) { if (r.error) throw r.error; })
         .catch(function(e) { alert('保存失败: ' + (e.message || '网络错误')); });
     };
@@ -976,9 +1003,10 @@
     function calcHoursStr(s, e) {
       if (!s || !e) return '--';
       var m = (e.getTime()-s.getTime())/60000;
-      return (m / 60).toFixed(1) + 'h';
+      var r = Math.floor(m / 30) * 30;
+      return (r / 60).toFixed(1) + 'h';
     }
-    function fmtHoursMin(t) { if (t<=0) return '--'; return (t / 60).toFixed(1) + 'h'; }
+    function fmtHoursMin(t) { if (t<=0) return '--'; var r=Math.floor(t/30)*30; return (r/60).toFixed(1)+'h'; }
     function gSN(sid) { var s=(window._stores||[]).filter(function(x){return x.store_id===sid})[0]; return s?s.name:sid; }
     function gPN(pid) { var p=(window._providers||[]).filter(function(x){return x.id===pid})[0]; return p?p.name:'--'; }
     function gPR(pid) { var p=(window._providers||[]).filter(function(x){return x.id===pid})[0]; return p?p.hourly_rate:0; }
