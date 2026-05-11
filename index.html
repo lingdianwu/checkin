@@ -459,8 +459,15 @@
     };
 
     // --- 每日码计算 ---
+    function effectiveDate(ch, cm) {
+      var now = new Date();
+      if (now.getHours() < ch || (now.getHours() === ch && now.getMinutes() < cm)) {
+        return dateStr(new Date(now.getTime() - 86400000));
+      }
+      return dateStr(now);
+    }
     function computeDailyCode(secret, sid) {
-      var today = dateStr(new Date());
+      var today = effectiveDate(cutoffHour, cutoffMinute);
       var input = secret + '|' + sid + '|' + today;
       var hash = 5381;
       for (var i = 0; i < input.length; i++) {

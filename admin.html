@@ -852,8 +852,15 @@
     }
 
     // ====== 二维码 & 每日密钥 ======
-    function computeDailyCode(secret, sid) {
-      var today = dateStr(new Date());
+    function effectiveDate(ch, cm) {
+      var now = new Date();
+      if (now.getHours() < ch || (now.getHours() === ch && now.getMinutes() < cm)) {
+        return dateStr(new Date(now.getTime() - 86400000));
+      }
+      return dateStr(now);
+    }
+    function computeDailyCode(secret, sid, ch, cm) {
+      var today = effectiveDate(ch != null ? ch : 2, cm != null ? cm : 0);
       var input = secret + '|' + sid + '|' + today;
       var hash = 5381;
       for (var i = 0; i < input.length; i++) {
@@ -936,7 +943,7 @@
           return;
         }
         var html = stores.map(function(s) {
-          var code = secret ? computeDailyCode(secret, s.store_id) : '';
+          var code = secret ? computeDailyCode(secret, s.store_id, s.cutoff_hour, s.cutoff_minute) : '';
           var qrUrl = baseUrl + '?store=' + s.store_id + (code ? '&code=' + code : '');
           return '<div class="qr-card"><h4>' + escHtml(s.name) + '</h4>' +
             '<div id="qr-' + s.store_id + '"></div>' +
@@ -946,7 +953,7 @@
         document.getElementById('qrContainer').innerHTML = html;
         setTimeout(function() {
           stores.forEach(function(s) {
-            var code = secret ? computeDailyCode(secret, s.store_id) : '';
+            var code = secret ? computeDailyCode(secret, s.store_id, s.cutoff_hour, s.cutoff_minute) : '';
             var el = document.getElementById('qr-' + s.store_id);
             if (el) new QRCode(el, {
               text: baseUrl + '?store=' + s.store_id + (code ? '&code=' + code : ''),
