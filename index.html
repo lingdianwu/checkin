@@ -427,6 +427,13 @@
         .then(function(_ref5) {
           if (_ref5.error) throw _ref5.error;
           currentRecord = _ref5.data;
+          // 签退后清除 URL 中的 code
+          if (urlCode) {
+            var u = new URL(location.href);
+            u.searchParams.delete('code');
+            history.replaceState(null, '', u.toString());
+            urlCode = '';
+          }
           renderCheckOutDone(_ref5.data);
           toast('签退成功，请重新扫码进行下次签到');
         }).catch(function(err) {
