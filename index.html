@@ -445,9 +445,7 @@
     function calcHours(start, end) {
       if (!start || !end) return '--';
       var diff = end.getTime() - start.getTime();
-      var hrs = Math.floor(diff / 3600000);
-      var mins = Math.floor((diff % 3600000) / 60000);
-      return hrs > 0 ? hrs + '小时' + mins + '分钟' : mins + '分钟';
+      return (diff / 3600000).toFixed(1) + '小时';
     }
     function maskPhone(p) {
       if (!p || p.length < 7) return p;

@@ -45,6 +45,7 @@
       <button data-tab="roster" onclick="switchTab('roster')">花名册管理</button>
       <button data-tab="stores" onclick="switchTab('stores')">门店管理</button>
       <button data-tab="qrcode" onclick="switchTab('qrcode')">门店二维码</button>
+      <button data-tab="providers" onclick="switchTab('providers')">第三方管理</button>
     </div>
 
     <!-- 考勤记录 -->
@@ -69,6 +70,7 @@
           <select id="rosterStore"><option value="">选择门店</option></select>
           <input type="text" id="rosterName" placeholder="员工姓名" style="min-width:100px">
           <input type="tel" id="rosterPhone" placeholder="手机号" style="min-width:140px" maxlength="11">
+          <select id="rosterProvider"><option value="">选择第三方(可选)</option></select>
           <button class="btn-primary" onclick="addRoster()">添加</button>
         </div>
       </div>
@@ -77,6 +79,7 @@
         <p style="font-size:12px;color:#999;margin-bottom:8px">Excel 第一列为<b>姓名</b>，第二列为<b>手机号</b>（需含表头行）</p>
         <div class="roster-add">
           <select id="batchStore"><option value="">选择门店</option></select>
+          <select id="batchProvider"><option value="">选择第三方(可选)</option></select>
           <label class="file-input-label" style="flex:1;cursor:pointer">
           <span id="excelFileName">选择 Excel 文件</span>
           <input type="file" id="excelFile" accept=".xlsx,.xls" style="display:none" onchange="document.getElementById('excelFileName').textContent = (this.files[0] || {}).name || '选择 Excel 文件'">
@@ -167,6 +170,23 @@
       <div class="qr-section" id="qrContainer"><div class="loading">加载中</div></div>
     </div>
 
+    <!-- 第三方管理 -->
+    <div class="tab-content" id="tab-providers" style="display:none">
+      <div class="roster-section">
+        <h3>添加第三方</h3>
+        <div class="roster-add">
+          <select id="providerStore"><option value="">选择门店</option></select>
+          <input type="text" id="providerName" placeholder="第三方名称" style="min-width:120px">
+          <input type="number" id="providerRate" placeholder="服务费(元/小时)" style="min-width:130px" step="0.01" min="0">
+          <button class="btn-primary" onclick="addProvider()">添加</button>
+        </div>
+      </div>
+      <div class="roster-section">
+        <h3>第三方列表</h3>
+        <div id="providerListContainer"><div class="loading">加载中</div></div>
+      </div>
+    </div>
+
   </div>
 
   <script src="js/supabase.min.js"></script>
@@ -179,6 +199,8 @@
     var gAdminStoreId = '';  // 登录人的门店
     var gAdminName = '';     // 登录人姓名
     var gIsSuper = false;    // 是否超级管理员
+    window._providers = [];   // 第三方列表缓存
+    window._rosterMap = {};   // key: "store_id|name" -> roster row
 
     window.doLogin = function() {
       var phone = document.getElementById('loginPhone').value.trim();
@@ -283,7 +305,7 @@
           document.getElementById('rosterStore').innerHTML = '<option value="">选择门店</option>' + opts;
           document.getElementById('batchStore').innerHTML = '<option value="">选择门店</option>' + opts;
           document.getElementById('adminStore').innerHTML = '<option value="">选择门店</option>' + opts;
-          // 门店管理员：锁定筛选项
+          document.getElementById('providerStore').innerHTML = '<option value="">选择门店</option>' + opts;
           if (gAdminStoreId) {
             document.getElementById('filterStore').value = gAdminStoreId;
             document.getElementById('filterStore').disabled = true;
@@ -291,11 +313,15 @@
             document.getElementById('rosterStore').disabled = true;
             document.getElementById('batchStore').value = gAdminStoreId;
             document.getElementById('batchStore').disabled = true;
+            document.getElementById('providerStore').value = gAdminStoreId;
+            document.getElementById('providerStore').disabled = true;
           }
-          loadRecords();
-          loadRosterList();
-          loadStoreList();
-          loadAdminList();
+          loadProviders().then(function() {
+            loadRosterList().then(function() { loadRecords(); });
+            loadStoreList();
+            loadAdminList();
+            loadProviderList();
+          });
         });
     }
 
@@ -330,13 +356,23 @@
         if (r.error) throw r.error;
         var records = r.data || [];
         if (records.length === 0) { alert('没有可导出的记录'); return; }
-        var header = '姓名,门店,日期,到岗时间,离岗时间,在岗时长';
+        var header = '姓名,门店,日期,到岗时间,离岗时间,在岗时长,第三方,服务费(元)';
         var rows = records.map(function(rec) {
           var ci = new Date(rec.check_in), co = rec.check_out ? new Date(rec.check_out) : null;
+          var re = window._rosterMap[rec.store_id + '|' + rec.name];
+          var pid = re ? re.provider_id : null;
+          var pname = pid ? gPN(pid) : '';
+          var fee = '';
+          if (co && pid) {
+            var rate = gPR(pid);
+            var hrs = (co.getTime() - ci.getTime()) / 3600000;
+            fee = (hrs * rate).toFixed(2);
+          }
           return [
             rec.name, gSN(rec.store_id), rec.date,
             fmtTime(ci), fmtTime(co),
-            co ? calcHoursStr(ci, co) : '未签退'
+            co ? calcHoursStr(ci, co) : '未签退',
+            pname, fee
           ].map(function(v) { return '"' + (v || '').replace(/"/g, '""') + '"'; }).join(',');
         });
         var csv = '﻿' + header + '\n' + rows.join('\n');
@@ -356,19 +392,26 @@
         document.getElementById('summaryCards').innerHTML = '';
         return;
       }
-      var todayStr = dateStr(new Date()), todayCount = 0, todayTotalMin = 0;
+      var todayStr = dateStr(new Date()), todayCount = 0, todayTotalMin = 0, todayTotalFee = 0;
       records.forEach(function(r) {
         if (r.date === todayStr) todayCount++;
         if (r.date === todayStr && r.check_out) {
-          todayTotalMin += (new Date(r.check_out).getTime() - new Date(r.check_in).getTime()) / 60000;
+          var mins = (new Date(r.check_out).getTime() - new Date(r.check_in).getTime()) / 60000;
+          todayTotalMin += mins;
+          var re = window._rosterMap[r.store_id + '|' + r.name];
+          if (re && re.provider_id) {
+            var rate = gPR(re.provider_id);
+            todayTotalFee += (mins / 60) * rate;
+          }
         }
       });
       document.getElementById('summaryCards').innerHTML =
         '<div class="summary-card"><div class="num">' + records.length + '</div><div class="label">筛选记录数</div></div>' +
         '<div class="summary-card"><div class="num">' + todayCount + '</div><div class="label">今日打卡人次</div></div>' +
-        '<div class="summary-card"><div class="num">' + fmtHoursMin(todayTotalMin) + '</div><div class="label">今日在岗总时长</div></div>';
+        '<div class="summary-card"><div class="num">' + fmtHoursMin(todayTotalMin) + '</div><div class="label">今日在岗总时长</div></div>' +
+        '<div class="summary-card"><div class="num">' + todayTotalFee.toFixed(2) + '元</div><div class="label">今日服务费合计</div></div>';
       document.getElementById('recordsContainer').innerHTML =
-        '<table class="records-table"><thead><tr><th>姓名</th><th>门店</th><th>日期</th><th>到岗</th><th>离岗</th><th>在岗时长</th><th>操作</th></tr></thead><tbody>' +
+        '<table class="records-table"><thead><tr><th>姓名</th><th>门店</th><th>日期</th><th>到岗</th><th>离岗</th><th>在岗时长</th><th>第三方</th><th>服务费</th><th>操作</th></tr></thead><tbody>' +
         records.map(function(r) {
           var ci = new Date(r.check_in), co = r.check_out ? new Date(r.check_out) : null;
           var needsCheckout = !co;
@@ -393,6 +436,15 @@
               ? '<span style="color:#ef4440;font-weight:600">未签退</span>'
               : '<span style="color:#f59e0b">在岗中</span>';
           }
+          var re = window._rosterMap[r.store_id + '|' + r.name];
+          var pid = re ? re.provider_id : null;
+          var pname = pid ? gPN(pid) : '--';
+          var feeStr = '--';
+          if (co && pid) {
+            var rate = gPR(pid);
+            var hrs = (co.getTime() - ci.getTime()) / 3600000;
+            feeStr = (hrs * rate).toFixed(2) + '元';
+          }
           var actionHtml = '<button class="btn-danger" onclick="deleteRecord(\'' + r.id + '\')">删除</button>';
           if (needsCheckout) {
             actionHtml += ' <button class="btn-success" onclick="setCheckOut(\'' + r.id + '\',\'' + r.check_in + '\')">编辑离岗</button>';
@@ -404,6 +456,8 @@
             '<td>' + fmtTime(ci) + '</td>' +
             '<td>' + fmtTime(co) + '</td>' +
             '<td class="hours">' + hourCell + '</td>' +
+            '<td>' + escHtml(pname) + '</td>' +
+            '<td class="hours">' + feeStr + '</td>' +
             '<td>' + actionHtml + '</td>' +
             '</tr>';
         }).join('') + '</tbody></table>';
@@ -414,6 +468,7 @@
       var storeId = document.getElementById('rosterStore').value;
       var name = document.getElementById('rosterName').value.trim();
       var phone = document.getElementById('rosterPhone').value.trim();
+      var providerId = document.getElementById('rosterProvider').value;
       if (!storeId) { alert('请选择门店'); return; }
       if (gAdminStoreId && storeId !== gAdminStoreId) { alert('无权限'); return; }
       if (!name) { alert('请输入姓名'); return; }
@@ -421,17 +476,19 @@
       db.from('roster').select('*').eq('store_id', storeId).eq('name', name).single()
         .then(function(r) {
           if (r.data) { alert('该员工已存在'); return Promise.reject('dup'); }
-          return db.from('roster').insert({ store_id: storeId, name: name, phone: phone || null });
+          return db.from('roster').insert({ store_id: storeId, name: name, phone: phone || null, provider_id: providerId || null });
         }).then(function(res) {
           if (res && res.error) throw res.error;
           document.getElementById('rosterName').value = '';
           document.getElementById('rosterPhone').value = '';
+          document.getElementById('rosterProvider').value = '';
           loadRosterList();
         }).catch(function(e) { if (e !== 'dup') alert('添加失败: ' + (e.message || '网络错误')); });
     };
 
     window.batchImportExcel = function() {
       var storeId = document.getElementById('batchStore').value;
+      var providerId = document.getElementById('batchProvider').value;
       var fileEl = document.getElementById('excelFile');
       var msgEl = document.getElementById('batchMsg');
       if (!storeId) { msgEl.textContent = '请选择门店'; msgEl.style.color = '#f44336'; return; }
@@ -454,7 +511,7 @@
             var phone = (row[1] !== undefined ? String(row[1]).trim() : '');
             if (!name) continue;
             if (phone && !/^1\d{10}$/.test(phone)) { errors.push('第' + (r + 1) + '行手机号格式错误: ' + phone); continue; }
-            items.push({ store_id: storeId, name: name, phone: phone || null, max_checkins: 3 });
+            items.push({ store_id: storeId, name: name, phone: phone || null, max_checkins: 3, provider_id: providerId || null });
           }
           if (errors.length) { msgEl.textContent = errors.join('; '); msgEl.style.color = '#f44336'; return; }
           if (items.length === 0) { msgEl.textContent = '没有可导入的数据'; msgEl.style.color = '#f44336'; return; }
@@ -474,6 +531,7 @@
           }).then(function(res) {
             if (res && res.error) throw res.error;
             fileEl.value = '';
+            document.getElementById('batchProvider').value = '';
             msgEl.textContent = '成功导入 ' + items.length + ' 人，跳过 ' + skipped.length + ' 人'; msgEl.style.color = '#4caf50';
             loadRosterList();
           }).catch(function(err) {
@@ -490,28 +548,102 @@
       document.getElementById('rosterListContainer').innerHTML = '<div class="loading">加载中</div>';
       var query = db.from('roster').select('*').order('store_id').order('name');
       if (gAdminStoreId) query = query.eq('store_id', gAdminStoreId);
-      query.then(function(r) {
+      return query.then(function(r) {
           if (r.error) throw r.error;
           var list = r.data || [];
+          window._rosterMap = {};
+          list.forEach(function(x) { window._rosterMap[x.store_id + '|' + x.name] = x; });
           if (list.length === 0) {
             document.getElementById('rosterListContainer').innerHTML = '<div class="empty-state">暂无员工</div>';
             return;
           }
           document.getElementById('rosterListContainer').innerHTML =
-            '<table class="roster-table"><thead><tr><th>门店</th><th>姓名</th><th>手机号</th><th>每日次数</th><th>操作</th></tr></thead><tbody>' +
+            '<table class="roster-table"><thead><tr><th>门店</th><th>姓名</th><th>手机号</th><th>每日次数</th><th>第三方</th><th>操作</th></tr></thead><tbody>' +
             list.map(function(i) {
               var mc = (i.max_checkins != null) ? i.max_checkins : 3;
+              var provOpts = '<option value="">无</option>' +
+                (window._providers || []).filter(function(p) { return p.store_id === i.store_id; }).map(function(p) {
+                  return '<option value="' + p.id + '"' + (i.provider_id === p.id ? ' selected' : '') + '>' + escHtml(p.name) + '</option>';
+                }).join('');
               return '<tr>' +
                 '<td>' + escHtml(gSN(i.store_id)) + '</td>' +
                 '<td>' + escHtml(i.name) + '</td>' +
                 '<td><input type="tel" id="phone-' + i.id + '" value="' + (i.phone || '') + '" placeholder="未录入" style="width:130px;padding:4px 8px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none"></td>' +
                 '<td><input type="number" id="mc-' + i.id + '" value="' + mc + '" min="1" max="99" style="width:60px;padding:4px 8px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none;text-align:center"></td>' +
+                '<td><select id="prov-' + i.id + '" style="padding:4px 6px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none;background:#fff">' + provOpts + '</select></td>' +
                 '<td><button class="btn-success" onclick="savePhone(\'' + i.id + '\')" style="margin-right:4px">保存</button>' +
                 '<button class="btn-danger" onclick="delRoster(\'' + i.id + '\')">删除</button></td>' +
                 '</tr>';
             }).join('') + '</tbody></table>';
         });
     }
+
+    // ====== 第三方管理 ======
+    function loadProviders() {
+      var query = db.from('service_provider').select('*').order('name');
+      if (gAdminStoreId) query = query.eq('store_id', gAdminStoreId);
+      return query.then(function(r) {
+        if (r.error) throw r.error;
+        window._providers = r.data || [];
+        var opts = window._providers.map(function(p) {
+          return '<option value="' + p.id + '">' + escHtml(p.name) + ' (' + p.hourly_rate + '元/h)</option>';
+        }).join('');
+        document.getElementById('rosterProvider').innerHTML = '<option value="">选择第三方(可选)</option>' + opts;
+        document.getElementById('batchProvider').innerHTML = '<option value="">选择第三方(可选)</option>' + opts;
+      });
+    }
+
+    window.addProvider = function() {
+      var sid = document.getElementById('providerStore').value;
+      var name = document.getElementById('providerName').value.trim();
+      var rate = parseFloat(document.getElementById('providerRate').value);
+      if (!sid) { alert('请选择门店'); return; }
+      if (!name) { alert('请输入第三方名称'); return; }
+      if (isNaN(rate) || rate < 0) { alert('请输入有效的服务费（元/小时）'); return; }
+      db.from('service_provider').insert({ store_id: sid, name: name, hourly_rate: rate })
+        .then(function(res) {
+          if (res.error) throw res.error;
+          document.getElementById('providerName').value = '';
+          document.getElementById('providerRate').value = '';
+          loadProviders().then(function() { loadProviderList(); });
+        }).catch(function(e) { alert('添加失败: ' + (e.message || '网络错误')); });
+    };
+
+    function loadProviderList() {
+      var provs = window._providers || [];
+      if (provs.length === 0) {
+        document.getElementById('providerListContainer').innerHTML = '<div class="empty-state">暂无第三方</div>';
+        return;
+      }
+      document.getElementById('providerListContainer').innerHTML =
+        '<table class="roster-table"><thead><tr><th>门店</th><th>名称</th><th>服务费(元/小时)</th><th>操作</th></tr></thead><tbody>' +
+        provs.map(function(p) {
+          return '<tr>' +
+            '<td>' + escHtml(gSN(p.store_id)) + '</td>' +
+            '<td><input type="text" id="pname-' + p.id + '" value="' + escHtml(p.name) + '" style="width:140px;padding:4px 8px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none"></td>' +
+            '<td><input type="number" id="prate-' + p.id + '" value="' + p.hourly_rate + '" step="0.01" min="0" style="width:90px;padding:4px 8px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none"></td>' +
+            '<td><button class="btn-success" onclick="saveProvider(\'' + p.id + '\')" style="margin-right:4px">保存</button>' +
+            '<button class="btn-danger" onclick="delProvider(\'' + p.id + '\')">删除</button></td>' +
+            '</tr>';
+        }).join('') + '</tbody></table>';
+    }
+
+    window.saveProvider = function(id) {
+      var name = document.getElementById('pname-' + id).value.trim();
+      var rate = parseFloat(document.getElementById('prate-' + id).value);
+      if (!name) { alert('名称不能为空'); return; }
+      if (isNaN(rate) || rate < 0) { alert('请输入有效的服务费'); return; }
+      db.from('service_provider').update({ name: name, hourly_rate: rate }).eq('id', id)
+        .then(function(r) { if (r.error) throw r.error; loadProviders().then(function() { loadProviderList(); }); })
+        .catch(function(e) { alert('保存失败: ' + (e.message || '网络错误')); });
+    };
+
+    window.delProvider = function(id) {
+      if (!confirm('确认删除？')) return;
+      db.from('service_provider').delete().eq('id', id)
+        .then(function(r) { if (r.error) throw r.error; loadProviders().then(function() { loadProviderList(); }); })
+        .catch(function(e) { alert('删除失败: ' + (e.message || '网络错误')); });
+    };
 
     // ====== 门店管理 ======
     window.addStore = function() {
@@ -630,7 +762,8 @@
       Promise.all([
         db.from('store').delete().eq('store_id', sid),
         db.from('roster').delete().eq('store_id', sid),
-        db.from('check_record').delete().eq('store_id', sid)
+        db.from('check_record').delete().eq('store_id', sid),
+        db.from('service_provider').delete().eq('store_id', sid)
       ]).then(function() { loadStores(); })
         .catch(function(e) { alert('删除失败: ' + (e.message || '网络错误')); });
     };
@@ -671,9 +804,11 @@
     window.savePhone = function(id) {
       var phone = document.getElementById('phone-' + id).value.trim();
       var mc = parseInt(document.getElementById('mc-' + id).value, 10);
+      var providerEl = document.getElementById('prov-' + id);
+      var providerId = providerEl ? providerEl.value : null;
       if (phone && !/^1\d{10}$/.test(phone)) { alert('手机号格式不正确'); return; }
       if (isNaN(mc) || mc < 1) { alert('每日次数至少为1'); return; }
-      db.from('roster').update({ phone: phone || null, max_checkins: mc }).eq('id', id)
+      db.from('roster').update({ phone: phone || null, max_checkins: mc, provider_id: providerId || null }).eq('id', id)
         .then(function(r) { if (r.error) throw r.error; loadRosterList(); })
         .catch(function(e) { alert('保存失败: ' + (e.message || '网络错误')); });
     };
@@ -826,6 +961,7 @@
       document.querySelectorAll('.tab-content').forEach(function(c) { c.style.display = 'none'; });
       document.getElementById('tab-' + tab).style.display = '';
       if (tab === 'qrcode') loadQRCodes();
+      if (tab === 'providers') { loadProviders().then(function() { loadProviderList(); }); }
     };
 
     // ====== 工具 ======
@@ -835,11 +971,13 @@
     function fmtTime(d) { if (!d) return '--'; return ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2); }
     function calcHoursStr(s, e) {
       if (!s || !e) return '--';
-      var m = Math.floor((e.getTime()-s.getTime())/60000);
-      return m>=60 ? Math.floor(m/60)+'h '+m%60+'min' : m+'min';
+      var m = (e.getTime()-s.getTime())/60000;
+      return (m / 60).toFixed(1) + 'h';
     }
-    function fmtHoursMin(t) { if (t<=0) return '--'; var h=Math.floor(t/60); return h>0?h+'h '+Math.round(t%60)+'min':Math.round(t)+'min'; }
+    function fmtHoursMin(t) { if (t<=0) return '--'; return (t / 60).toFixed(1) + 'h'; }
     function gSN(sid) { var s=(window._stores||[]).filter(function(x){return x.store_id===sid})[0]; return s?s.name:sid; }
+    function gPN(pid) { var p=(window._providers||[]).filter(function(x){return x.id===pid})[0]; return p?p.name:'--'; }
+    function gPR(pid) { var p=(window._providers||[]).filter(function(x){return x.id===pid})[0]; return p?p.hourly_rate:0; }
     function escHtml(s) { if (!s) return ''; return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   })();
   </script>

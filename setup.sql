@@ -31,7 +31,8 @@ CREATE TABLE IF NOT EXISTS roster (
   store_id TEXT NOT NULL,
   name TEXT NOT NULL,
   phone TEXT,
-  max_checkins INTEGER DEFAULT 3
+  max_checkins INTEGER DEFAULT 3,
+  provider_id BIGINT
 );
 
 -- 3. 打卡记录表
@@ -44,7 +45,15 @@ CREATE TABLE IF NOT EXISTS check_record (
   date TEXT NOT NULL
 );
 
--- 4. 应用配置表
+-- 5. 第三方服务商表
+CREATE TABLE IF NOT EXISTS service_provider (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  store_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  hourly_rate FLOAT NOT NULL DEFAULT 0
+);
+
+-- 6. 应用配置表
 CREATE TABLE IF NOT EXISTS app_config (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   admin_password TEXT NOT NULL,
@@ -62,12 +71,14 @@ ALTER TABLE admin_user ENABLE ROW LEVEL SECURITY;
 ALTER TABLE roster ENABLE ROW LEVEL SECURITY;
 ALTER TABLE check_record ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE service_provider ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "allow_all" ON store FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "allow_all" ON admin_user FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "allow_all" ON roster FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "allow_all" ON check_record FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "allow_all" ON app_config FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "allow_all" ON service_provider FOR ALL USING (true) WITH CHECK (true);
 
 -- ============================================
 -- 初始门店数据（根据实际情况修改）
@@ -76,3 +87,6 @@ INSERT INTO store (store_id, name) VALUES
   ('tianjin', '天津门店'),
   ('nanjing', '南京门店'),
   ('xian', '西安门店');
+
+-- 为已有数据库添加 provider_id 列（如列已存在则忽略）
+ALTER TABLE roster ADD COLUMN IF NOT EXISTS provider_id BIGINT;
