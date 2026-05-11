@@ -50,7 +50,6 @@
     if (!providerId) { showError('请扫描正确的注册二维码'); return; }
 
     var providerName = '';
-    var providerRate = 0;
 
     init();
 
@@ -61,8 +60,7 @@
           providerName = r.data.name;
           providerRate = r.data.hourly_rate;
           document.getElementById('providerLabel').innerHTML =
-            '<span class="provider-tag">' + escHtml(providerName) + '</span>' +
-            (providerRate ? ' <span style="font-size:12px;color:#999">服务费 ' + providerRate + '元/h</span>' : '');
+            '<span class="provider-tag">' + escHtml(providerName) + '</span>';
           return db.from('store').select('store_id,name').order('store_id');
         }).then(function(r) {
           if (r.error) throw r.error;
