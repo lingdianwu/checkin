@@ -185,6 +185,29 @@
 
   </div>
 
+  <!-- 时间编辑弹窗 -->
+  <div class="modal-overlay" id="timeModal" style="display:none">
+    <div class="modal-card">
+      <div class="modal-header">
+        <span id="timeModalTitle">编辑时间</span>
+        <button class="modal-close" onclick="closeTimeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <p id="timeModalInfo" style="font-size:13px;color:#999;margin-bottom:14px"></p>
+        <div id="timeModalDateRow" style="margin-bottom:12px">
+          <label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px;color:#555">日期</label>
+          <input type="date" id="timeModalDate" style="width:100%;padding:10px 14px;font-size:14px;border:1px solid #d0d7e2;border-radius:8px;outline:none">
+        </div>
+        <div style="margin-bottom:16px">
+          <label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px;color:#555">时间</label>
+          <input type="time" id="timeModalTime" style="width:100%;padding:10px 14px;font-size:14px;border:1px solid #d0d7e2;border-radius:8px;outline:none" step="60">
+        </div>
+        <p id="timeModalError" style="font-size:13px;color:#f44336;display:none;margin-bottom:8px"></p>
+        <button class="btn-primary" id="timeModalConfirm" style="width:100%">确认</button>
+      </div>
+    </div>
+  </div>
+
   <script src="js/supabase.min.js"></script>
   <script src="js/qrcode.min.js"></script>
   <script src="js/xlsx.full.min.js"></script>
@@ -771,56 +794,90 @@
         .catch(function(e) { alert('删除失败: ' + (e.message || '网络错误')); });
     };
 
-    window.setCheckOut = function(id, checkIn) {
-      var ci = new Date(checkIn);
-      var defDate = ci.getFullYear() + '-' + ('0'+(ci.getMonth()+1)).slice(-2) + '-' + ('0'+ci.getDate()).slice(-2);
-      var defTime = defDate + ' 18:00';
-      var input = prompt('到岗时间：' + fmtDateTime(ci) + '\n请输入离岗时间（YYYY-MM-DD HH:MM）', defTime);
-      if (!input) return;
-      var parts = input.trim().split(/[\sT]+/);
-      var datePart = parts[0], timePart = parts[1];
-      if (!datePart || !timePart) { alert('格式：YYYY-MM-DD HH:MM，如 ' + defTime); return; }
-      var dateParts = datePart.split('-');
-      var timeParts = timePart.split(':');
-      var y = parseInt(dateParts[0], 10), mo = parseInt(dateParts[1], 10) - 1, d = parseInt(dateParts[2], 10);
-      var h = parseInt(timeParts[0], 10), m = parseInt(timeParts[1], 10);
-      if (isNaN(y) || isNaN(mo) || isNaN(d) || isNaN(h) || isNaN(m)) { alert('格式不正确'); return; }
-      var co = new Date(y, mo, d, h, m, 0);
-      if (isNaN(co.getTime())) { alert('日期无效'); return; }
-      if (co <= ci) { alert('离岗时间（' + fmtDateTime(co) + '）不能早于到岗时间（' + fmtDateTime(ci) + '）'); return; }
-      // 最晚离岗时间 = 到岗日期 + 1天 + 门店截止时间
-      var nextDay = new Date(ci.getFullYear(), ci.getMonth(), ci.getDate() + 1);
-      var store = (window._stores || []).filter(function(s) { return s.store_id === gAdminStoreId; })[0];
-      var cutoffH = (store && store.cutoff_hour != null) ? store.cutoff_hour : 2;
-      var cutoffM = (store && store.cutoff_minute != null) ? store.cutoff_minute : 0;
-      var maxCo = new Date(nextDay.getFullYear(), nextDay.getMonth(), nextDay.getDate(), cutoffH, cutoffM, 0);
-      if (co > maxCo) { alert('离岗时间最晚为次日 ' + ('0'+cutoffH).slice(-2) + ':' + ('0'+cutoffM).slice(-2) + '（门店截止时间）'); return; }
-      db.from('check_record').update({ check_out: co.toISOString() }).eq('id', id)
-        .then(function(r) { if (r.error) throw r.error; loadRecords(); })
-        .catch(function(e) { alert('设置失败: ' + (e.message || '网络错误')); });
+    // ====== 时间编辑弹窗 ======
+    var _timeModalCb = null;
+
+    function openTimeModal(title, info, dateVal, timeVal, showDate, cb) {
+      document.getElementById('timeModalTitle').textContent = title;
+      document.getElementById('timeModalInfo').textContent = info;
+      document.getElementById('timeModalDate').value = dateVal;
+      document.getElementById('timeModalTime').value = timeVal;
+      document.getElementById('timeModalDateRow').style.display = showDate ? '' : 'none';
+      document.getElementById('timeModalError').style.display = 'none';
+      document.getElementById('timeModal').style.display = '';
+      _timeModalCb = cb;
+    }
+
+    window.closeTimeModal = function() {
+      document.getElementById('timeModal').style.display = 'none';
+      _timeModalCb = null;
     };
+
+    document.addEventListener('DOMContentLoaded', function() {
+      document.getElementById('timeModalConfirm').onclick = function() {
+        if (_timeModalCb) _timeModalCb(
+          document.getElementById('timeModalDate').value,
+          document.getElementById('timeModalTime').value
+        );
+      };
+    });
+
+    function showTimeErr(msg) {
+      var el = document.getElementById('timeModalError');
+      el.textContent = msg; el.style.display = '';
+    }
+
     function fmtDateTime(d) {
       return d.getFullYear() + '-' + ('0'+(d.getMonth()+1)).slice(-2) + '-' + ('0'+d.getDate()).slice(-2) +
         ' ' + ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2);
     }
+
+    window.setCheckOut = function(id, checkIn) {
+      var ci = new Date(checkIn);
+      var defDate = ci.getFullYear() + '-' + ('0'+(ci.getMonth()+1)).slice(-2) + '-' + ('0'+ci.getDate()).slice(-2);
+      var defTime = '18:00';
+      openTimeModal('编辑离岗时间', '到岗时间：' + fmtDateTime(ci), defDate, defTime, true, function(dateVal, timeVal) {
+        if (!dateVal || !timeVal) { showTimeErr('请填写完整的日期和时间'); return; }
+        var dp = dateVal.split('-'), tp = timeVal.split(':');
+        var y = parseInt(dp[0], 10), mo = parseInt(dp[1], 10) - 1, d = parseInt(dp[2], 10);
+        var h = parseInt(tp[0], 10), m = parseInt(tp[1], 10);
+        if (isNaN(y) || isNaN(mo) || isNaN(d) || isNaN(h) || isNaN(m)) { showTimeErr('格式不正确'); return; }
+        var co = new Date(y, mo, d, h, m, 0);
+        if (isNaN(co.getTime())) { showTimeErr('日期无效'); return; }
+        if (co <= ci) { showTimeErr('离岗时间不能早于到岗时间'); return; }
+        var nextDay = new Date(ci.getFullYear(), ci.getMonth(), ci.getDate() + 1);
+        var store = (window._stores || []).filter(function(s) { return s.store_id === gAdminStoreId; })[0];
+        var cutoffH = (store && store.cutoff_hour != null) ? store.cutoff_hour : 2;
+        var cutoffM = (store && store.cutoff_minute != null) ? store.cutoff_minute : 0;
+        var maxCo = new Date(nextDay.getFullYear(), nextDay.getMonth(), nextDay.getDate(), cutoffH, cutoffM, 0);
+        if (co > maxCo) { showTimeErr('最晚为次日 ' + ('0'+cutoffH).slice(-2) + ':' + ('0'+cutoffM).slice(-2)); return; }
+        closeTimeModal();
+        db.from('check_record').update({ check_out: co.toISOString() }).eq('id', id)
+          .then(function(r) { if (r.error) throw r.error; loadRecords(); })
+          .catch(function(e) { alert('设置失败: ' + (e.message || '网络错误')); });
+      });
+    };
+
     window.setCheckIn = function(id, checkIn, checkOutStr) {
       var ci = new Date(checkIn);
       var defTime = ('0'+ci.getHours()).slice(-2) + ':' + ('0'+ci.getMinutes()).slice(-2);
-      var input = prompt('到岗日期：' + ci.getFullYear() + '-' + ('0'+(ci.getMonth()+1)).slice(-2) + '-' + ('0'+ci.getDate()).slice(-2) + '\n请输入新的到岗时间（HH:MM）', defTime);
-      if (!input) return;
-      var timeParts = input.trim().split(':');
-      if (timeParts.length !== 2) { alert('格式：HH:MM，如 ' + defTime); return; }
-      var h = parseInt(timeParts[0], 10), m = parseInt(timeParts[1], 10);
-      if (isNaN(h) || isNaN(m)) { alert('格式不正确'); return; }
-      var newCi = new Date(ci.getFullYear(), ci.getMonth(), ci.getDate(), h, m, 0);
-      if (isNaN(newCi.getTime())) { alert('日期无效'); return; }
-      if (checkOutStr) {
-        var co = new Date(checkOutStr);
-        if (newCi >= co) { alert('到岗时间（' + fmtDateTime(newCi) + '）不能晚于离岗时间（' + fmtDateTime(co) + '）'); return; }
-      }
-      db.from('check_record').update({ check_in: newCi.toISOString() }).eq('id', id)
-        .then(function(r) { if (r.error) throw r.error; loadRecords(); })
-        .catch(function(e) { alert('设置失败: ' + (e.message || '网络错误')); });
+      var dateStr2 = ci.getFullYear() + '-' + ('0'+(ci.getMonth()+1)).slice(-2) + '-' + ('0'+ci.getDate()).slice(-2);
+      openTimeModal('编辑到岗时间', '到岗日期：' + dateStr2 + '（不可修改）', dateStr2, defTime, false, function(dateVal, timeVal) {
+        if (!timeVal) { showTimeErr('请填写时间'); return; }
+        var tp = timeVal.split(':');
+        var h = parseInt(tp[0], 10), m = parseInt(tp[1], 10);
+        if (isNaN(h) || isNaN(m)) { showTimeErr('格式不正确'); return; }
+        var newCi = new Date(ci.getFullYear(), ci.getMonth(), ci.getDate(), h, m, 0);
+        if (isNaN(newCi.getTime())) { showTimeErr('时间无效'); return; }
+        if (checkOutStr) {
+          var co = new Date(checkOutStr);
+          if (newCi >= co) { showTimeErr('到岗时间不能晚于离岗时间'); return; }
+        }
+        closeTimeModal();
+        db.from('check_record').update({ check_in: newCi.toISOString() }).eq('id', id)
+          .then(function(r) { if (r.error) throw r.error; loadRecords(); })
+          .catch(function(e) { alert('设置失败: ' + (e.message || '网络错误')); });
+      });
     };
     window.savePhone = function(id) {
       var storeId = document.getElementById('store-' + id).value;
