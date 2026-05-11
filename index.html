@@ -462,10 +462,12 @@
         return;
       }
       setTimeout(function() {
+        var boxW = Math.min(document.querySelector('.scanner-box').offsetWidth, 420);
+        var qrSize = Math.floor(boxW * 0.7);
         window._html5QrCode = new Html5Qrcode('qrReader');
         window._html5QrCode.start(
           { facingMode: 'environment' },
-          { fps: 10, qrbox: { width: 250, height: 250 } },
+          { fps: 10, qrbox: { width: qrSize, height: qrSize } },
           function(decodedText) {
             stopScan();
             if (/index\.html/.test(decodedText)) {
