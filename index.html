@@ -263,13 +263,10 @@
           if (rec.date === yesterday && (now.getHours() > cutoffHour || (now.getHours() === cutoffHour && now.getMinutes() >= cutoffMinute))) {
             currentRecord = null;
             renderNoneStatus(rec);
-          } else if (urlCode && !sessionStorage.getItem('scanned-in')) {
-            // 扫码进的，有在岗记录 → 自动签退
-            currentRecord = rec;
-            doCheckOut();
           } else {
             currentRecord = rec;
-            renderCheckedIn(rec);
+            // 扫码进来的且有在岗记录 → 显示确认签退按钮（不自动）
+            renderCheckedIn(rec, !!urlCode);
           }
         }).catch(function() {
           currentRecord = null;
@@ -295,17 +292,21 @@
       document.getElementById('btnCheckout').style.display = 'none';
     }
 
-    function renderCheckedIn(rec) {
+    function renderCheckedIn(rec, justScanned) {
       document.getElementById('statusBadge').textContent = '已到岗';
       document.getElementById('statusBadge').className = 'status-badge in';
       document.getElementById('timeInfo').innerHTML =
         '<div class="time-row"><span class="label">到岗时间</span><span class="value">' + fmtTime(new Date(rec.check_in)) + '</span></div>' +
-        '<div class="hours-highlight" style="color:#e65100">请重新扫码进行签退</div>';
+        (justScanned
+          ? '<div class="hours-highlight" style="color:#e65100">请确认签退</div>'
+          : '<div class="hours-highlight" style="color:#e65100">请重新扫码进行签退</div>');
       document.getElementById('btnCheckin').style.display = 'none';
-      document.getElementById('btnCheckout').style.display = 'none';
-      document.getElementById('btnChange').style.display = '';
-      document.getElementById('btnChange').textContent = '扫码签退';
-      document.getElementById('btnChange').onclick = startScan;
+      document.getElementById('btnCheckout').style.display = justScanned ? '' : 'none';
+      document.getElementById('btnChange').style.display = justScanned ? 'none' : '';
+      if (!justScanned) {
+        document.getElementById('btnChange').textContent = '扫码签退';
+        document.getElementById('btnChange').onclick = startScan;
+      }
     }
 
     function renderCheckedOut(rec) {
