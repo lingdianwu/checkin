@@ -83,10 +83,14 @@
       if (!storeId) { errEl.textContent = '请选择门店'; errEl.style.display = ''; return; }
       if (!name) { errEl.textContent = '请输入姓名'; errEl.style.display = ''; return; }
       if (phone && !/^1\d{10}$/.test(phone)) { errEl.textContent = '手机号格式不正确'; errEl.style.display = ''; return; }
-      // 检查是否已在花名册
-      db.from('roster').select('id').eq('store_id', storeId).eq('name', name).single()
-        .then(function(r) {
-          if (r.data) { errEl.textContent = '该姓名在此门店已存在'; errEl.style.display = ''; return Promise.reject('dup'); }
+      // 检查手机号是否已注册
+      var checkPhone = phone ? db.from('roster').select('id').eq('phone', phone).maybeSingle() : Promise.resolve(null);
+      checkPhone.then(function(dupPhone) {
+        if (dupPhone && dupPhone.data) { errEl.textContent = '该手机号已注册，请勿重复加入'; errEl.style.display = ''; return Promise.reject('dupPhone'); }
+        // 检查是否已在花名册（同门店同姓名）
+        return db.from('roster').select('id').eq('store_id', storeId).eq('name', name).single();
+      }).then(function(r) {
+          if (r && r.data) { errEl.textContent = '该姓名在此门店已存在'; errEl.style.display = ''; return Promise.reject('dup'); }
           return db.from('roster').insert({
             store_id: storeId, name: name, phone: phone || null, provider_id: providerId
           });
@@ -95,7 +99,7 @@
           document.getElementById('formCard').style.display = 'none';
           document.getElementById('doneCard').style.display = '';
         }).catch(function(e) {
-          if (e !== 'dup') { errEl.textContent = '注册失败: ' + (e.message || '网络错误'); errEl.style.display = ''; }
+          if (e !== 'dup' && e !== 'dupPhone') { errEl.textContent = '注册失败: ' + (e.message || '网络错误'); errEl.style.display = ''; }
         });
     };
 
