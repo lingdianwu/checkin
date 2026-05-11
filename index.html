@@ -77,7 +77,8 @@
     var currentPhone = null;
     var currentRecord = null;
     var phoneToName = {};
-    var phoneToMax = {}; // max check-ins per day
+    var phoneToMax = {};   // max check-ins per day
+    var phoneToDevice = {}; // device_id binding per phone
     var storeLat = null;
     var storeLng = null;
     var dailySecret = null;
@@ -145,15 +146,17 @@
     }
 
     function loadRoster() {
-      return db.from('roster').select('name,phone,max_checkins').eq('store_id', storeId)
+      return db.from('roster').select('name,phone,max_checkins,device_id').eq('store_id', storeId)
         .then(function(_ref2) {
           if (_ref2.error) throw _ref2.error;
           phoneToName = {};
           phoneToMax = {};
+          phoneToDevice = {};
           (_ref2.data || []).forEach(function(r) {
             if (r.phone) {
               phoneToName[r.phone] = r.name;
               phoneToMax[r.phone] = (r.max_checkins != null) ? r.max_checkins : 3;
+              phoneToDevice[r.phone] = r.device_id || null;
             }
           });
         });
@@ -223,6 +226,15 @@
     }
 
     // --- 手机号登录 ---
+    function getDeviceId() {
+      var id = localStorage.getItem('_devid');
+      if (!id) {
+        id = 'dev-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 8);
+        localStorage.setItem('_devid', id);
+      }
+      return id;
+    }
+
     window.doPhoneLogin = function() {
       var phone = document.getElementById('phoneInput').value.trim();
       if (!phone) return;
@@ -236,6 +248,19 @@
         document.getElementById('phoneError').textContent = '该手机号不在花名册中，请联系管理员';
         document.getElementById('phoneError').style.display = '';
         return;
+      }
+      // 设备绑定检查
+      var boundDevice = phoneToDevice[phone];
+      var curDevice = getDeviceId();
+      if (boundDevice && boundDevice !== curDevice) {
+        document.getElementById('phoneError').textContent = '该手机号已在其他设备绑定，请联系管理员解绑';
+        document.getElementById('phoneError').style.display = '';
+        return;
+      }
+      // 首次绑定
+      if (!boundDevice) {
+        db.from('roster').update({ device_id: curDevice }).eq('store_id', storeId).eq('phone', phone)
+          .then(function() { phoneToDevice[phone] = curDevice; });
       }
       currentPhone = phone;
       currentName = name;

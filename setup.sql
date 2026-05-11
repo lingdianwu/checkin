@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS roster (
   name TEXT NOT NULL,
   phone TEXT,
   max_checkins INTEGER DEFAULT 3,
-  provider_id BIGINT
+  provider_id BIGINT,
+  device_id TEXT
 );
 
 -- 3. 打卡记录表
@@ -89,3 +90,4 @@ INSERT INTO store (store_id, name) VALUES
 
 -- 为已有数据库添加 provider_id 列（如列已存在则忽略）
 ALTER TABLE roster ADD COLUMN IF NOT EXISTS provider_id BIGINT;
+ALTER TABLE roster ADD COLUMN IF NOT EXISTS device_id TEXT;
