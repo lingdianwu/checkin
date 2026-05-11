@@ -217,6 +217,7 @@
       </div>
       <div class="modal-body">
         <div id="regQrContainer" style="display:flex;justify-content:center;margin-bottom:12px"></div>
+        <button class="btn-outline" onclick="downloadQR('regQrContainer','注册二维码.png')" style="margin-bottom:12px;font-size:12px;padding:6px 14px">下载二维码</button>
         <p id="regQrUrl" style="font-size:12px;color:#999;word-break:break-all;margin-bottom:12px"></p>
         <p style="font-size:12px;color:#666">将此二维码发给兼职人员，扫码即可自助注册</p>
       </div>
@@ -1060,6 +1061,7 @@
           return '<div class="qr-card"><h4>' + escHtml(s.name) + '</h4>' +
             '<div id="qr-' + s.store_id + '"></div>' +
             '<div class="qr-hint">今日码: ' + (code || '<span style="color:#e65100">请先设置密钥</span>') + '</div>' +
+            '<button class="btn-outline" onclick="downloadQR(\'qr-' + s.store_id + '\',\'' + s.store_id + '.png\')" style="margin-top:8px;font-size:12px;padding:6px 14px">下载二维码</button>' +
             '</div>';
         }).join('');
         document.getElementById('qrContainer').innerHTML = html;
@@ -1103,6 +1105,20 @@
     function gPN(pid) { var p=(window._providers||[]).filter(function(x){return x.id===pid})[0]; return p?p.name:'--'; }
     function gPR(pid) { var p=(window._providers||[]).filter(function(x){return x.id===pid})[0]; return p?p.hourly_rate:0; }
     function escHtml(s) { if (!s) return ''; return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    window.downloadQR = function(wrapperId, filename) {
+      var el = document.getElementById(wrapperId);
+      if (!el) return;
+      var canvas = el.querySelector('canvas');
+      var img = el.querySelector('img');
+      if (canvas) {
+        var a = document.createElement('a');
+        a.href = canvas.toDataURL('image/png');
+        a.download = filename; a.click();
+      } else if (img) {
+        var a = document.createElement('a');
+        a.href = img.src; a.download = filename; a.click();
+      }
+    };
   })();
   </script>
 </body>
