@@ -1107,6 +1107,11 @@
     window.downloadQR = function(wrapperId, filename, title, subtitle) {
       var el = document.getElementById(wrapperId);
       if (!el) return;
+      // 如果没传标题，尝试从父卡片读取
+      if (!title) {
+        var card = el.closest('.qr-card');
+        if (card) { var h4 = card.querySelector('h4'); if (h4) title = h4.textContent.trim(); }
+      }
       var srcCanvas = el.querySelector('canvas');
       var srcImg = el.querySelector('img');
       if (!srcCanvas && !srcImg) return;
