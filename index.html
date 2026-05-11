@@ -258,11 +258,15 @@
             renderNoneStatus(rec);
             return;
           }
-          // 未签退的记录，判断是否过期（隔天凌晨2点后自动作废）
+          // 未签退的记录，判断是否过期
           var now = new Date();
           if (rec.date === yesterday && (now.getHours() > cutoffHour || (now.getHours() === cutoffHour && now.getMinutes() >= cutoffMinute))) {
             currentRecord = null;
             renderNoneStatus(rec);
+          } else if (urlCode && !sessionStorage.getItem('scanned-in')) {
+            // 扫码进的，有在岗记录 → 自动签退
+            currentRecord = rec;
+            doCheckOut();
           } else {
             currentRecord = rec;
             renderCheckedIn(rec);
@@ -295,9 +299,13 @@
       document.getElementById('statusBadge').textContent = '已到岗';
       document.getElementById('statusBadge').className = 'status-badge in';
       document.getElementById('timeInfo').innerHTML =
-        '<div class="time-row"><span class="label">到岗时间</span><span class="value">' + fmtTime(new Date(rec.check_in)) + '</span></div>';
+        '<div class="time-row"><span class="label">到岗时间</span><span class="value">' + fmtTime(new Date(rec.check_in)) + '</span></div>' +
+        '<div class="hours-highlight" style="color:#e65100">请重新扫码进行签退</div>';
       document.getElementById('btnCheckin').style.display = 'none';
-      document.getElementById('btnCheckout').style.display = '';
+      document.getElementById('btnCheckout').style.display = 'none';
+      document.getElementById('btnChange').style.display = '';
+      document.getElementById('btnChange').textContent = '扫码签退';
+      document.getElementById('btnChange').onclick = startScan;
     }
 
     function renderCheckedOut(rec) {
@@ -367,6 +375,7 @@
           if (_ref4 === 'limit') return;
           if (_ref4.error) throw _ref4.error;
           currentRecord = _ref4.data;
+          sessionStorage.setItem('scanned-in', '1');
           renderCheckInDone(_ref4.data);
           toast('签到成功，请重新扫码进行签退');
         }).catch(function(err) {
@@ -382,6 +391,7 @@
         .then(function(_ref5) {
           if (_ref5.error) throw _ref5.error;
           currentRecord = _ref5.data;
+          sessionStorage.removeItem('scanned-in');
           renderCheckOutDone(_ref5.data);
           toast('签退成功，请重新扫码进行下次签到');
         }).catch(function(err) {
@@ -391,6 +401,7 @@
 
     window.clearIdentity = function() {
       localStorage.removeItem(saveKey());
+      sessionStorage.removeItem('scanned-in');
       currentName = null;
       currentPhone = null;
       currentRecord = null;
