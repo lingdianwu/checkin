@@ -1136,20 +1136,20 @@
         ctx.fillStyle = '#222';
         ctx.font = 'bold 18px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(title, cardW / 2, topH + 12);
+        ctx.textBaseline = 'middle';
+        ctx.fillText(title, cardW / 2, topH / 2);
       }
-      // 二维码
       if (srcCanvas) {
         ctx.drawImage(srcCanvas, padding, topH, srcW, srcH);
       } else {
         ctx.drawImage(srcImg, padding, topH, srcW, srcH);
       }
-      // 副标题（今日码/链接）
       if (hasSub) {
         ctx.fillStyle = '#999';
         ctx.font = '12px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(subtitle, cardW / 2, topH + srcH + bottomH + 4);
+        ctx.textBaseline = 'middle';
+        ctx.fillText(subtitle, cardW / 2, topH + srcH + bottomH / 2);
       }
       var a = document.createElement('a');
       a.href = resultCanvas.toDataURL('image/png');
