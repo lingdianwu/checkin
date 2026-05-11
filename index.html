@@ -313,8 +313,13 @@
       } else {
         info.innerHTML = '<div style="color:#999;padding:10px">今天还没有打卡记录</div>';
       }
-      document.getElementById('btnCheckin').style.display = '';
+      document.getElementById('btnCheckin').style.display = urlCode ? '' : 'none';
       document.getElementById('btnCheckout').style.display = 'none';
+      document.getElementById('btnChange').style.display = urlCode ? 'none' : '';
+      if (!urlCode) {
+        document.getElementById('btnChange').textContent = '扫码签到';
+        document.getElementById('btnChange').onclick = startScan;
+      }
     }
 
     function renderCheckedIn(rec, justScanned) {
@@ -379,6 +384,7 @@
 
     // --- 打卡操作 ---
     window.doCheckIn = function() {
+      if (!urlCode) { toast('请先扫码', 'error'); return; }
       var maxC = phoneToMax[currentPhone] || 3;
       var today = dateStr(new Date());
       db.from('check_record').select('id', { count: 'exact' })
