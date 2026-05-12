@@ -388,23 +388,29 @@
         if (r.error) throw r.error;
         var records = r.data || [];
         if (records.length === 0) { alert('没有可导出的记录'); return; }
-        var header = '姓名,门店,日期,到岗时间,离岗时间,在岗时长,第三方,服务费(元)';
+        var header = '姓名,门店,日期,到岗时间,离岗时间,在岗时长,时薪,工资,第三方,服务费(元)';
         var rows = records.map(function(rec) {
           var ci = new Date(rec.check_in), co = rec.check_out ? new Date(rec.check_out) : null;
           var re = window._rosterMap[rec.store_id + '|' + rec.name];
           var pid = re ? re.provider_id : null;
           var pname = pid ? gPN(pid) : '';
-          var fee = '';
+          var fee = '', salary = '';
           if (co && pid) {
             var rate = gPR(pid);
             var mins = (co.getTime() - ci.getTime()) / 60000;
             var roundedHrs = Math.floor(mins / 30) * 30 / 60;
             fee = (roundedHrs * rate).toFixed(2);
           }
+          if (co && rec.hourly_wage != null) {
+            var mins2 = (co.getTime() - ci.getTime()) / 60000;
+            var roundedHrs2 = Math.floor(mins2 / 30) * 30 / 60;
+            salary = (roundedHrs2 * parseFloat(rec.hourly_wage)).toFixed(2);
+          }
           return [
             rec.name, gSN(rec.store_id), rec.date,
             fmtTime(ci), fmtTime(co),
             co ? calcHoursStr(ci, co) : '未签退',
+            rec.hourly_wage != null ? rec.hourly_wage : '', salary,
             pname, fee
           ].map(function(v) { return '"' + (v || '').replace(/"/g, '""') + '"'; }).join(',');
         });
@@ -425,7 +431,7 @@
         document.getElementById('summaryCards').innerHTML = '';
         return;
       }
-      var todayStr = dateStr(new Date()), todayCount = 0, todayTotalMin = 0, todayTotalFee = 0;
+      var todayStr = dateStr(new Date()), todayCount = 0, todayTotalMin = 0, todayTotalFee = 0, todayTotalSalary = 0;
       records.forEach(function(r) {
         if (r.date === todayStr) todayCount++;
         if (r.date === todayStr && r.check_out) {
@@ -436,15 +442,19 @@
             var rate = gPR(re.provider_id);
             todayTotalFee += (Math.floor(mins / 30) * 30 / 60) * rate;
           }
+          if (r.hourly_wage != null) {
+            todayTotalSalary += (Math.floor(mins / 30) * 30 / 60) * parseFloat(r.hourly_wage);
+          }
         }
       });
       document.getElementById('summaryCards').innerHTML =
         '<div class="summary-card"><div class="num">' + records.length + '</div><div class="label">筛选记录数</div></div>' +
         '<div class="summary-card"><div class="num">' + todayCount + '</div><div class="label">今日打卡人次</div></div>' +
         '<div class="summary-card"><div class="num">' + fmtHoursMin(todayTotalMin) + '</div><div class="label">今日在岗总时长</div></div>' +
+        '<div class="summary-card"><div class="num">' + todayTotalSalary.toFixed(2) + '元</div><div class="label">今日工资合计</div></div>' +
         '<div class="summary-card"><div class="num">' + todayTotalFee.toFixed(2) + '元</div><div class="label">今日服务费合计</div></div>';
       document.getElementById('recordsContainer').innerHTML =
-        '<table class="records-table"><thead><tr><th>姓名</th><th>门店</th><th>日期</th><th>到岗</th><th>离岗</th><th>在岗时长</th><th>第三方</th><th>服务费</th><th>操作</th></tr></thead><tbody>' +
+        '<table class="records-table"><thead><tr><th>姓名</th><th>门店</th><th>日期</th><th>到岗</th><th>离岗</th><th>在岗时长</th><th>时薪</th><th>工资</th><th>第三方</th><th>服务费</th><th>操作</th></tr></thead><tbody>' +
         records.map(function(r) {
           var ci = new Date(r.check_in), co = r.check_out ? new Date(r.check_out) : null;
           var needsCheckout = !co;
@@ -479,6 +489,14 @@
             var roundedHrs = Math.floor(mins / 30) * 30 / 60;
             feeStr = (roundedHrs * rate).toFixed(2) + '元';
           }
+          // 工资 = 时薪 × 在岗时长
+          var wageVal = (r.hourly_wage != null) ? r.hourly_wage : '';
+          var salaryStr = '--';
+          if (co && wageVal !== '') {
+            var mins2 = (co.getTime() - ci.getTime()) / 60000;
+            var roundedHrs2 = Math.floor(mins2 / 30) * 30 / 60;
+            salaryStr = (roundedHrs2 * parseFloat(wageVal)).toFixed(2) + '元';
+          }
           var actionHtml = '<button class="btn-danger" onclick="deleteRecord(\'' + r.id + '\')">删除</button>' +
             ' <button class="btn-success" onclick="setCheckIn(\'' + r.id + '\',\'' + r.check_in + '\'' + (r.check_out ? ',\'' + r.check_out + '\'' : '') + ')">编辑到岗</button>';
           if (needsCheckout) {
@@ -491,6 +509,8 @@
             '<td>' + fmtTime(ci) + '</td>' +
             '<td>' + fmtTime(co) + '</td>' +
             '<td class="hours">' + hourCell + '</td>' +
+            '<td><input type="number" id="wage-' + r.id + '" value="' + wageVal + '" placeholder="-" step="0.01" min="0" style="width:60px;padding:4px 6px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none;text-align:center" onchange="saveWage(\'' + r.id + '\')"></td>' +
+            '<td class="hours">' + salaryStr + '</td>' +
             '<td>' + escHtml(pname) + '</td>' +
             '<td class="hours">' + feeStr + '</td>' +
             '<td>' + actionHtml + '</td>' +
@@ -813,6 +833,20 @@
         db.from('check_record').delete().eq('store_id', sid)
       ]).then(function() { loadStores(); })
         .catch(function(e) { alert('删除失败: ' + (e.message || '网络错误')); });
+    };
+
+    // ====== 时薪 ======
+    window.saveWage = function(id) {
+      var wage = document.getElementById('wage-' + id).value;
+      if (wage === '') {
+        db.from('check_record').update({ hourly_wage: null }).eq('id', id)
+          .then(function() { loadRecords(); }).catch(function(e) { alert('保存失败: ' + e.message); });
+      } else {
+        var val = parseFloat(wage);
+        if (isNaN(val) || val < 0) { alert('请输入有效时薪'); return; }
+        db.from('check_record').update({ hourly_wage: val }).eq('id', id)
+          .then(function() { loadRecords(); }).catch(function(e) { alert('保存失败: ' + e.message); });
+      }
     };
 
     // ====== 删除 ======

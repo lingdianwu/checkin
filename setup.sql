@@ -43,7 +43,8 @@ CREATE TABLE IF NOT EXISTS check_record (
   name TEXT NOT NULL,
   check_in TIMESTAMPTZ NOT NULL,
   check_out TIMESTAMPTZ,
-  date TEXT NOT NULL
+  date TEXT NOT NULL,
+  hourly_wage FLOAT
 );
 
 -- 5. 第三方服务商表（全局，不绑定门店）
@@ -91,3 +92,4 @@ INSERT INTO store (store_id, name) VALUES
 -- 为已有数据库添加 provider_id 列（如列已存在则忽略）
 ALTER TABLE roster ADD COLUMN IF NOT EXISTS provider_id BIGINT;
 ALTER TABLE roster ADD COLUMN IF NOT EXISTS device_id TEXT;
+ALTER TABLE check_record ADD COLUMN IF NOT EXISTS hourly_wage FLOAT;
