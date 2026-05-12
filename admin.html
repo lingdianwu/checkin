@@ -497,11 +497,15 @@
             var roundedHrs2 = Math.floor(mins2 / 30) * 30 / 60;
             salaryStr = (roundedHrs2 * parseFloat(wageVal)).toFixed(2) + '元';
           }
-          var actionHtml = '<button class="btn-danger" onclick="deleteRecord(\'' + r.id + '\')">删除</button>' +
+          var actionHtml =
+            '<button class="btn-sm" onclick="var a=document.getElementById(\'acts-' + r.id + '\');a.style.display=a.style.display===\'none\'?\'inline\':\'none\'" style="font-size:14px;padding:2px 8px;line-height:1;border:1px solid #d0d7e2;border-radius:4px;background:#fff;cursor:pointer">⋮</button>' +
+            '<span id="acts-' + r.id + '" style="display:none">' +
+            ' <button class="btn-danger" onclick="deleteRecord(\'' + r.id + '\')">删除</button>' +
             ' <button class="btn-success" onclick="setCheckIn(\'' + r.id + '\',\'' + r.check_in + '\'' + (r.check_out ? ',\'' + r.check_out + '\'' : '') + ')">编辑到岗</button>';
           if (needsCheckout) {
             actionHtml += ' <button class="btn-success" onclick="setCheckOut(\'' + r.id + '\',\'' + r.check_in + '\')">编辑离岗</button>';
           }
+          actionHtml += '</span>';
           return '<tr>' +
             '<td>' + escHtml(r.name) + '</td>' +
             '<td>' + escHtml(gSN(r.store_id)) + '</td>' +
