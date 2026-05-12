@@ -511,7 +511,9 @@
             '<td>' + escHtml(gSN(r.store_id)) + '</td>' +
             '<td>' + r.date + '</td>' +
             '<td>' + fmtTime(ci) + '</td>' +
-            '<td>' + fmtTime(co) + '</td>' +
+            '<td>' + fmtTime(co) +
+            (co && (co.getDate() !== ci.getDate() || co.getMonth() !== ci.getMonth() || co.getFullYear() !== ci.getFullYear())
+              ? '<sup style="color:#e65100;font-weight:700;font-size:10px">+1</sup>' : '') + '</td>' +
             '<td class="hours">' + hourCell + '</td>' +
             '<td><input type="number" id="wage-' + r.id + '" value="' + wageVal + '" placeholder="-" step="0.01" min="0" style="width:60px;padding:4px 6px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none;text-align:center" onchange="saveWage(\'' + r.id + '\')"></td>' +
             '<td class="hours">' + salaryStr + '</td>' +
