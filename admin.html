@@ -57,6 +57,7 @@
         <span style="color:#888">至</span>
         <input type="date" id="filterDateTo">
         <button class="btn-primary" onclick="loadRecords()">查询</button>
+        <button class="btn-outline" onclick="resetRecords()">重置</button>
         <button class="btn-outline" onclick="exportCSV()">导出 CSV</button>
       </div>
       <div id="recordsContainer"><div class="loading">加载中</div></div>
@@ -358,6 +359,13 @@
     }
 
     // ====== 考勤记录 ======
+    window.resetRecords = function() {
+      document.getElementById('filterStore').value = gAdminStoreId || '';
+      var today = dateStr(new Date());
+      document.getElementById('filterDateFrom').value = today;
+      document.getElementById('filterDateTo').value = today;
+      loadRecords();
+    };
     window.loadRecords = function() {
       document.getElementById('recordsContainer').innerHTML = '<div class="loading">加载中</div>';
       var filterStore = document.getElementById('filterStore').value;
