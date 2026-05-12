@@ -419,7 +419,7 @@
             rec.name, gSN(rec.store_id), rec.date,
             fmtTime(ci), fmtTime(co),
             co ? calcHoursStr(ci, co) : '未签退',
-            rec.hourly_wage != null ? rec.hourly_wage : '', salary,
+            rec.hourly_wage != null ? String(rec.hourly_wage) : '', salary,
             pname, fee
           ].map(function(v) { return '"' + (v || '').replace(/"/g, '""') + '"'; }).join(',');
         });
