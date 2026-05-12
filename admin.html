@@ -409,10 +409,11 @@
             var roundedHrs = Math.floor(mins / 30) * 30 / 60;
             fee = (roundedHrs * rate).toFixed(2);
           }
-          if (co && rec.hourly_wage != null) {
+          if (co && rec.hourly_wage != null && rec.hourly_wage !== '') {
             var mins2 = (co.getTime() - ci.getTime()) / 60000;
             var roundedHrs2 = Math.floor(mins2 / 30) * 30 / 60;
-            salary = (roundedHrs2 * parseFloat(rec.hourly_wage)).toFixed(2);
+            var w = parseFloat(rec.hourly_wage);
+            if (!isNaN(w)) salary = (roundedHrs2 * w).toFixed(2);
           }
           return [
             rec.name, gSN(rec.store_id), rec.date,
@@ -503,7 +504,8 @@
           if (co && wageVal !== '') {
             var mins2 = (co.getTime() - ci.getTime()) / 60000;
             var roundedHrs2 = Math.floor(mins2 / 30) * 30 / 60;
-            salaryStr = (roundedHrs2 * parseFloat(wageVal)).toFixed(2) + '元';
+            var w2 = parseFloat(wageVal);
+            if (!isNaN(w2)) salaryStr = (roundedHrs2 * w2).toFixed(2) + '元';
           }
           var actionHtml =
             '<button class="btn-sm" onclick="var a=document.getElementById(\'acts-' + r.id + '\');a.style.display=a.style.display===\'none\'?\'inline\':\'none\'" style="font-size:14px;padding:2px 8px;line-height:1;border:1px solid #d0d7e2;border-radius:4px;background:#fff;cursor:pointer">⋮</button>' +
