@@ -471,7 +471,7 @@
           var needsCheckout = !co;
           var hourCell;
           if (co) {
-            hourCell = calcHoursStr(ci, co);
+            hourCell = '<span' + (((co.getTime() - ci.getTime()) / 3600000) > 12 ? ' style="color:#e65100;font-weight:800"': '') + '>' + calcHoursStr(ci, co) + '</span>';
           } else {
             var pastDue = false;
             var yesterdayStr = dateStr(new Date(Date.now() - 86400000));
@@ -518,7 +518,8 @@
             actionHtml += ' <button class="btn-success" onclick="setCheckOut(\'' + r.id + '\',\'' + r.check_in + '\')">编辑离岗</button>';
           }
           actionHtml += '</span>';
-          return '<tr>' +
+          var isOvertime = co && ((co.getTime() - ci.getTime()) / 3600000) > 12;
+          return '<tr' + (isOvertime ? ' style="background:#fff3e0 !important"' : '') + '>' +
             '<td>' + escHtml(r.name) + '</td>' +
             '<td>' + escHtml(gSN(r.store_id)) + '</td>' +
             '<td>' + r.date + '</td>' +
