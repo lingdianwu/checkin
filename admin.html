@@ -772,19 +772,21 @@
         stores.map(function(s) {
           var ch = s.cutoff_hour != null ? ('0'+s.cutoff_hour).slice(-2) : '02';
           var cm = s.cutoff_minute != null ? ('0'+s.cutoff_minute).slice(-2) : '00';
-          var coord = (s.lat && s.lng) ? s.lat.toFixed(4) + ', ' + s.lng.toFixed(4) : '未设置';
           return '<tr>' +
             '<td>' + escHtml(s.store_id) + '</td>' +
-            '<td>' + escHtml(s.name) + '</td>' +
-            '<td>' + coord + '</td>' +
+            '<td><input type="text" id="sname-' + s.store_id + '" value="' + escHtml(s.name) + '" style="width:100px;padding:4px 8px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none"></td>' +
+            '<td><input type="text" id="slat-' + s.store_id + '" value="' + (s.lat ? s.lat.toFixed(6) : '') + '" placeholder="纬度" style="width:80px;padding:4px 8px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none">' +
+            '<input type="text" id="slng-' + s.store_id + '" value="' + (s.lng ? s.lng.toFixed(6) : '') + '" placeholder="经度" style="width:80px;padding:4px 8px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none"></td>' +
             '<td>' +
-            '<select id="sch-' + s.store_id + '" onchange="saveStoreCutoff(\'' + s.store_id + '\')" style="padding:4px 6px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none;background:#fff">' +
+            '<select id="sch-' + s.store_id + '" style="padding:4px 6px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none;background:#fff">' +
             [0,1,2,3,4,5,6,7,8].map(function(h) { return '<option value="' + h + '"' + (h === (s.cutoff_hour||2) ? ' selected' : '') + '>' + ('0'+h).slice(-2) + '</option>'; }).join('') +
             '</select> : ' +
-            '<select id="scm-' + s.store_id + '" onchange="saveStoreCutoff(\'' + s.store_id + '\')" style="padding:4px 6px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none;background:#fff">' +
+            '<select id="scm-' + s.store_id + '" style="padding:4px 6px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none;background:#fff">' +
             ['00','30'].map(function(m) { return '<option value="' + m + '"' + (parseInt(m) === (s.cutoff_minute||0) ? ' selected' : '') + '>' + m + '</option>'; }).join('') +
             '</select></td>' +
-            '<td><button class="btn-danger" onclick="delStore(\'' + s.store_id + '\')">删除</button></td>' +
+            '<td>' +
+            '<button class="btn-success" onclick="saveStore(\'' + s.store_id + '\')" style="margin-right:4px">保存</button>' +
+            '<button class="btn-danger" onclick="delStore(\'' + s.store_id + '\')">删除</button></td>' +
             '</tr>';
         }).join('') + '</tbody></table>';
     }
@@ -836,11 +838,20 @@
             }).join('') + '</tbody></table>';
         });
     }
-    window.saveStoreCutoff = function(sid) {
+    window.saveStore = function(sid) {
+      var name = document.getElementById('sname-' + sid).value.trim();
+      var lat = parseFloat(document.getElementById('slat-' + sid).value);
+      var lng = parseFloat(document.getElementById('slng-' + sid).value);
       var h = parseInt(document.getElementById('sch-' + sid).value);
       var m = parseInt(document.getElementById('scm-' + sid).value);
-      db.from('store').update({ cutoff_hour: h, cutoff_minute: m }).eq('store_id', sid)
-        .then(function(r) { if (r.error) throw r.error; })
+      if (!name) { alert('门店名称不能为空'); return; }
+      db.from('store').update({
+        name: name,
+        lat: isNaN(lat) ? null : lat,
+        lng: isNaN(lng) ? null : lng,
+        cutoff_hour: h, cutoff_minute: m
+      }).eq('store_id', sid)
+        .then(function(r) { if (r.error) throw r.error; loadStores(); })
         .catch(function(e) { alert('保存失败: ' + (e.message || '网络错误')); });
     };
     window.delStore = function(sid) {
