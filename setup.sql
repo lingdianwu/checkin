@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS admin_user (
   store_id TEXT NOT NULL,
   name TEXT NOT NULL,
   phone TEXT NOT NULL UNIQUE,
-  password TEXT NOT NULL
+  password TEXT NOT NULL,
+  disabled BOOLEAN DEFAULT false
 );
 
 -- 3. 花名册表
@@ -93,3 +94,4 @@ INSERT INTO store (store_id, name) VALUES
 ALTER TABLE roster ADD COLUMN IF NOT EXISTS provider_id BIGINT;
 ALTER TABLE roster ADD COLUMN IF NOT EXISTS device_id TEXT;
 ALTER TABLE check_record ADD COLUMN IF NOT EXISTS hourly_wage FLOAT;
+ALTER TABLE admin_user ADD COLUMN IF NOT EXISTS disabled BOOLEAN DEFAULT false;
