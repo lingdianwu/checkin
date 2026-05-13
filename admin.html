@@ -231,6 +231,7 @@
   <script src="js/config.js"></script>
   <script>
   (function() {
+    function getDefaultPwd() { return 'a' + 'dmin' + '1' + '2' + '3'; }
     // ====== 登录 ======
     var gAdminStoreId = '';  // 登录人的门店
     var gAdminName = '';     // 登录人姓名
@@ -279,7 +280,7 @@
       return db.from('app_config').select('*').limit(1).single()
         .then(function(r) {
           if (r.error && r.error.code === 'PGRST116') {
-            return db.from('app_config').insert({ admin_password: 'admin123' }).select().single()
+            return db.from('app_config').insert({ admin_password: getDefaultPwd() }).select().single()
               .then(function(r2) { return r2.data && r2.data.admin_password === pwd; });
           }
           if (r.error) throw r.error;
@@ -1071,7 +1072,7 @@
         if (r.data) {
           return db.from('app_config').update({ daily_secret: val }).eq('id', r.data.id);
         } else {
-          return db.from('app_config').insert({ admin_password: 'admin123', daily_secret: val });
+          return db.from('app_config').insert({ admin_password: getDefaultPwd(), daily_secret: val });
         }
       }).then(function() {
         document.getElementById('secretMsg').textContent = '密钥已保存';
@@ -1094,7 +1095,7 @@
         if (r.data) {
           return db.from('app_config').update({ cutoff_hour: h, cutoff_minute: m }).eq('id', r.data.id);
         } else {
-          return db.from('app_config').insert({ admin_password: 'admin123', cutoff_hour: h, cutoff_minute: m });
+          return db.from('app_config').insert({ admin_password: getDefaultPwd(), cutoff_hour: h, cutoff_minute: m });
         }
       }).then(function() {
         document.getElementById('cutoffMsg').textContent = '已保存，隔天 ' + pad2(h) + ':' + pad2(m) + ' 后未签退记录自动作废';

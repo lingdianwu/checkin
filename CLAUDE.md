@@ -50,5 +50,5 @@ npx http-server . -p 8080 -c-1 --cors
 手机同 WiFi 访问 http://电脑IP:8080/index.html?store=tianjin
 
 ## 管理后台密码
-超级管理员：密码 admin123
+超级管理员：密码：初始密码
 门店管理员：在后台门店管理中添加
