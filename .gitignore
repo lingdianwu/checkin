@@ -4,3 +4,12 @@
 !.dev.vars.example
 .env*
 !.env.example
+
+# 敏感信息 — 切勿提交
+*secret*
+*password*
+*_key*
+!js/config.js
+node_modules/
+.DS_Store
+*.log
