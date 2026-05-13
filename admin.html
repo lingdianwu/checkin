@@ -698,7 +698,7 @@
           return '<tr>' +
             '<td><input type="text" id="pname-' + p.id + '" value="' + escHtml(p.name) + '" style="width:140px;padding:4px 8px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none"></td>' +
             '<td><input type="number" id="prate-' + p.id + '" value="' + p.hourly_rate + '" step="0.01" min="0" style="width:90px;padding:4px 8px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none"></td>' +
-            '<td><button class="btn-success" onclick="showRegQr(\'' + p.id + '\',\'' + escHtml(p.name).replace(/'/g, "\\'") + '\')" style="font-size:12px;padding:4px 8px">注册二维码</button></td>' +
+            '<td><button class="btn-success" onclick="showRegQr(\'' + p.id + '\',\'' + escJs(p.name) + '\')" style="font-size:12px;padding:4px 8px">注册二维码</button></td>' +
             '<td><button class="btn-success" onclick="saveProvider(\'' + p.id + '\')" style="margin-right:4px">保存</button>' +
             '<button class="btn-danger" onclick="delProvider(\'' + p.id + '\')">删除</button></td>' +
             '</tr>';
@@ -848,7 +848,7 @@
                 '<td>' + escHtml(gSN(a.store_id)) + '</td>' +
                 '<td><input type="text" id="an-' + a.id + '" value="' + escHtml(a.name) + '" style="width:80px;padding:4px 8px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none"></td>' +
                 '<td><input type="tel" id="ap-' + a.id + '" value="' + (a.phone||'') + '" style="width:120px;padding:4px 8px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none"></td>' +
-                '<td><input type="text" id="apw-' + a.id + '" value="' + escHtml(a.password||'') + '" style="width:80px;padding:4px 8px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none"></td>' +
+                '<td><input type="password" id="apw-' + a.id + '" value="' + escHtml(a.password||'') + '" style="width:80px;padding:4px 8px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none"></td>' +
                 '<td><select id="ad-' + a.id + '" style="padding:4px 6px;font-size:13px;border:1px solid #d0d7e2;border-radius:6px;outline:none;background:#fff">' +
                 '<option value="0"' + (!a.disabled ? ' selected' : '') + '>启用</option>' +
                 '<option value="1"' + (a.disabled ? ' selected' : '') + '>禁用</option></select></td>' +
@@ -1143,7 +1143,7 @@
           var qrUrl = baseUrl + '?store=' + s.store_id + (code ? '&code=' + code : '');
           return '<div class="qr-card"><h4>' + escHtml(s.name) + '</h4>' +
             '<div id="qr-' + s.store_id + '"></div>' +
-            '<button class="btn-outline" onclick="downloadQR(\'qr-' + s.store_id + '\',\'' + s.store_id + '.png\',\'' + escHtml(s.name).replace(/'/g, "\\'") + '\')" style="margin-top:8px;font-size:12px;padding:6px 14px">下载二维码</button>' +
+            '<button class="btn-outline" onclick="downloadQR(\'qr-' + s.store_id + '\',\'' + s.store_id + '.png\',\'' + escJs(s.name) + '\')" style="margin-top:8px;font-size:12px;padding:6px 14px">下载二维码</button>' +
             '</div>';
         }).join('');
         document.getElementById('qrContainer').innerHTML = html;
@@ -1187,6 +1187,7 @@
     function gPN(pid) { var p=(window._providers||[]).filter(function(x){return x.id===pid})[0]; return p?p.name:'--'; }
     function gPR(pid) { var p=(window._providers||[]).filter(function(x){return x.id===pid})[0]; return p?p.hourly_rate:0; }
     function escHtml(s) { if (!s) return ''; return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    function escJs(s) { return escHtml(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
     window.downloadQR = function(wrapperId, filename, title, subtitle) {
       var el = document.getElementById(wrapperId);
       if (!el) return;
